@@ -44,7 +44,7 @@ Setup: Apple m2 max, 96 GB RAM, Clang, Std = C++20.
 * Thread model: posix
 
 For more details, please find it in the slides [here](https://docs.google.com/presentation/d/1zHFswkLQOmpZ0-j5z1kHkkywEColxSCnFhcCCM90Mw0/edit?usp=sharing)
-Summary is that the new implemenation is **faster due to removing reallocations**, compared to STL vector logic.
+Summary is that the new implemenation is **faster due to removing recopying**, compared to STL vector logic.
 
 ### Command to build and run
 ```
