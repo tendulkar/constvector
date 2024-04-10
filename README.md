@@ -38,9 +38,13 @@ My algorithm described in the slides [here](https://docs.google.com/presentation
 * So we have written both implemenations with same level of optimisations (same allocators, same method modifiers, same number of function calls to the code), so that our comparision could be more accurate. we have choosen to keep implementations simple so that we could actually test the actual code instead of calculating overhead of multiple function calls (a function call typically takes > 1ns)
 
 ## Benchmark results
-Setup: Apple m2 max, 96 GB RAM, Clang, Std = C++20. 
-Please find it in the slides [here](https://docs.google.com/presentation/d/1zHFswkLQOmpZ0-j5z1kHkkywEColxSCnFhcCCM90Mw0/edit?usp=sharing)
-Idea is that this implemenation has **better time / op due to removing reallocations**
+Setup: Apple m2 max, 96 GB RAM, Clang, Std = C++20.
+* Apple clang version 15.0.0 (clang-1500.1.0.2.5)
+* Target: arm64-apple-darwin23.2.0
+* Thread model: posix
+
+For more details, please find it in the slides [here](https://docs.google.com/presentation/d/1zHFswkLQOmpZ0-j5z1kHkkywEColxSCnFhcCCM90Mw0/edit?usp=sharing)
+Summary is that the new implemenation is **faster due to removing reallocations**, compared to STL vector logic.
 
 ### Command to build and run
 ```
