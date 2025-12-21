@@ -46,7 +46,7 @@ int constantVectorPushPop(BenchVector &sv, int n)
     // cout << "Stellar vector capacity: " << sv.capacity() << endl;
 }
 
-int constantVectorPop(BenchVector &sv, int n)
+int constantVectorPopShrink(BenchVector &sv, int n)
 {
     for (int i = 0; i < n; i++)
     {
@@ -219,7 +219,7 @@ static void BM_ConstantVectorPush(benchmark::State &state)
     }
 }
 
-static void BM_ConstantVectorPop(benchmark::State &state)
+static void BM_ConstantVectorPopShrink(benchmark::State &state)
 {
     // Perform setup here
     for (auto _ : state)
@@ -229,7 +229,7 @@ static void BM_ConstantVectorPop(benchmark::State &state)
         BenchVector sv;
         constantVectorPush(sv, state.range(0));
         state.ResumeTiming();
-        constantVectorPop(sv, state.range(0));
+        constantVectorPopShrink(sv, state.range(0));
     }
 }
 
@@ -381,12 +381,12 @@ static void BM_VectorIteration(benchmark::State &state)
 
 #define ITERATIONS 30           // Statistically significant (n>=30 for CLT)
 #define START_SIZE int(10)
-#define END_SIZE int(1e7)
+#define END_SIZE int(1e8)
 #define RANGE_MULTIPLIER 10
 
 // Register the function as a benchmark
 BENCHMARK(BM_ConstantVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_ConstantVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_ConstantVectorPopShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPopNoShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);

@@ -11,5 +11,6 @@ medium_perf
 small_perf
 unrolled_perf
 loop_comparison
+pop_perf
 
 

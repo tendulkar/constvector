@@ -1,5 +1,6 @@
 #include <iostream>
 #include <algorithm>
+#include <cassert>
 
 #ifndef _CLASS_CONSTANT_VECTOR
 #define _CLASS_CONSTANT_VECTOR
