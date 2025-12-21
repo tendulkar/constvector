@@ -80,7 +80,7 @@ public:
 
     void push_back(const T &value)
     {
-        if (_size == _capacity)
+        if (__builtin_expect(_size == _capacity, 0))
         {
             _capacity *= 2;
             T *_new_array = _alloc.allocate(_capacity);
@@ -96,9 +96,9 @@ public:
 
     void pop_back()
     {
-        m_assert(_size, "StellarVector is empty, but pop_back() called!");
-        _size--;
-        if (_size <= _capacity / 2)
+        m_assert(_size, "STLVector is empty, but pop_back() called!");
+        --_size;
+        if (__builtin_expect(_size <= _capacity / 2, 0))
         {
             _capacity /= 2;
             T *_new_array = _alloc.allocate(_capacity);
@@ -119,7 +119,7 @@ public:
 
     inline const T &at(size_t index)
     {
-        return this[index];
+        return (*this)[index];
     }
 
     /**

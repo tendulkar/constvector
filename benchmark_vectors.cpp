@@ -289,8 +289,8 @@ static void BM_ConstantVectorIteration(benchmark::State &state)
 
     for (auto _ : state)
     {
-        // This code gets timed
-        constantVectorSum(sv);
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(constantVectorSum(sv));
     }
 }
 
@@ -367,13 +367,13 @@ static void BM_VectorIteration(benchmark::State &state)
     vectorPush(v, state.range(0));
     for (auto _ : state)
     {
-        // This code gets timed
-        vectorSum(v);
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(vectorSum(v));
     }
 }
 
-#define ITERATIONS 10
-#define START_SIZE 1000
+#define ITERATIONS 30           // Statistically significant (n>=30 for CLT)
+#define START_SIZE int(1e4)
 #define END_SIZE int(1e9)
 #define RANGE_MULTIPLIER 10
 
@@ -381,12 +381,10 @@ static void BM_VectorIteration(benchmark::State &state)
 BENCHMARK(BM_ConstantVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_ConstantVectorPopAndBack)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_VectorPopAndBack)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 // Run the benchmark
 BENCHMARK_MAIN();

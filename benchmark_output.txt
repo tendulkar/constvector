@@ -1,0 +1,58 @@
+Unable to determine clock rate from sysctl: hw.cpufrequency: No such file or directory
+This does not affect benchmark measurements, only the metadata output.
+***WARNING*** Failed to set thread affinity. Estimated CPU frequency may be incorrect.
+2025-12-22T02:17:48+05:30
+Running ./benchmark_vectors.out
+Run on (12 X 24 MHz CPU s)
+CPU Caches:
+  L1 Data 64 KiB
+  L1 Instruction 128 KiB
+  L2 Unified 4096 KiB (x12)
+Load Average: 6.23, 6.31, 6.52
+-----------------------------------------------------------------------------------------------------
+Benchmark                                                           Time             CPU   Iterations
+-----------------------------------------------------------------------------------------------------
+BM_ConstantVectorPush/10000/iterations:30_mean                   7531 ns         7511 ns            3
+BM_ConstantVectorPush/10000/iterations:30_median                 7254 ns         7233 ns            3
+BM_ConstantVectorPush/10000/iterations:30_stddev                  677 ns          693 ns            3
+BM_ConstantVectorPush/10000/iterations:30_cv                     8.99 %          9.23 %             3
+BM_ConstantVectorPush/100000/iterations:30_mean                 70043 ns        69511 ns            3
+BM_ConstantVectorPush/100000/iterations:30_median               70506 ns        69800 ns            3
+BM_ConstantVectorPush/100000/iterations:30_stddev                1640 ns         1161 ns            3
+BM_ConstantVectorPush/100000/iterations:30_cv                    2.34 %          1.67 %             3
+BM_ConstantVectorPush/1000000/iterations:30_mean               680819 ns       676878 ns            3
+BM_ConstantVectorPush/1000000/iterations:30_median             670144 ns       668933 ns            3
+BM_ConstantVectorPush/1000000/iterations:30_stddev              19499 ns        14900 ns            3
+BM_ConstantVectorPush/1000000/iterations:30_cv                   2.86 %          2.20 %             3
+BM_ConstantVectorPush/10000000/iterations:30_mean             6645206 ns      6629322 ns            3
+BM_ConstantVectorPush/10000000/iterations:30_median           6601142 ns      6594667 ns            3
+BM_ConstantVectorPush/10000000/iterations:30_stddev             97503 ns        99263 ns            3
+BM_ConstantVectorPush/10000000/iterations:30_cv                  1.47 %          1.50 %             3
+BM_ConstantVectorPush/100000000/iterations:30_mean           65320182 ns     65275911 ns            3
+BM_ConstantVectorPush/100000000/iterations:30_median         65047118 ns     65013733 ns            3
+BM_ConstantVectorPush/100000000/iterations:30_stddev           518981 ns       522150 ns            3
+BM_ConstantVectorPush/100000000/iterations:30_cv                 0.79 %          0.80 %             3
+BM_ConstantVectorPush/1000000000/iterations:30_mean         660690410 ns    659258222 ns            3
+BM_ConstantVectorPush/1000000000/iterations:30_median       659787150 ns    657773167 ns            3
+BM_ConstantVectorPush/1000000000/iterations:30_stddev         3051873 ns      3429993 ns            3
+BM_ConstantVectorPush/1000000000/iterations:30_cv                0.46 %          0.52 %             3
+BM_ConstantVectorPop/10000/iterations:30_mean                    5326 ns         5300 ns            3
+BM_ConstantVectorPop/10000/iterations:30_median                  5224 ns         5200 ns            3
+BM_ConstantVectorPop/10000/iterations:30_stddev                   179 ns          361 ns            3
+BM_ConstantVectorPop/10000/iterations:30_cv                      3.36 %          6.80 %             3
+BM_ConstantVectorPop/100000/iterations:30_mean                  45832 ns        45533 ns            3
+BM_ConstantVectorPop/100000/iterations:30_median                45585 ns        45533 ns            3
+BM_ConstantVectorPop/100000/iterations:30_stddev                  950 ns          600 ns            3
+BM_ConstantVectorPop/100000/iterations:30_cv                     2.07 %          1.32 %             3
+BM_ConstantVectorPop/1000000/iterations:30_mean                427597 ns       427111 ns            3
+BM_ConstantVectorPop/1000000/iterations:30_median              427315 ns       427300 ns            3
+BM_ConstantVectorPop/1000000/iterations:30_stddev                 872 ns          386 ns            3
+BM_ConstantVectorPop/1000000/iterations:30_cv                    0.20 %          0.09 %             3
+BM_ConstantVectorPop/10000000/iterations:30_mean              4241528 ns      4237211 ns            3
+BM_ConstantVectorPop/10000000/iterations:30_median            4239432 ns      4233833 ns            3
+BM_ConstantVectorPop/10000000/iterations:30_stddev              16730 ns        16626 ns            3
+BM_ConstantVectorPop/10000000/iterations:30_cv                   0.39 %          0.39 %             3
+BM_ConstantVectorPop/100000000/iterations:30_mean            42254587 ns     42175178 ns            3
+BM_ConstantVectorPop/100000000/iterations:30_median          42166399 ns     42112933 ns            3
+BM_ConstantVectorPop/100000000/iterations:30_stddev            165868 ns       122768 ns            3
+BM_ConstantVectorPop/100000000/iterations:30_cv                  0.39 %          0.29 %             3
