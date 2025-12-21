@@ -4,10 +4,10 @@
 #ifndef _CLASS_CONSTANT_VECTOR
 #define _CLASS_CONSTANT_VECTOR
 
-#define __SV_INITIAL_CAPACITY__ 8
-#define __SV_INITIAL_CAPACITY_BITS__ 3
-// 32 - 1 - 3 = 28 for 32-bit CLZ
-#define __SV_MSB_BITS__ 28
+constexpr size_t __SV_INITIAL_CAPACITY__ = 256;
+constexpr size_t __SV_INITIAL_CAPACITY_BITS__ = 8;
+// 32 - 1 - 8 = 23 for 32-bit CLZ
+constexpr size_t __SV_MSB_BITS__ = 23;
 
 #ifndef m_assert
 #define m_assert(expr, msg) assert(((void)(msg), (expr)))

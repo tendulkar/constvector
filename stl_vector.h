@@ -36,11 +36,11 @@ public:
         inline STLVector<T>::iterator &operator++() noexcept
         {
             // std::cout <<  "Operator++ is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            if (_index == _sv->_size)
-            {
-                // handle iterator at the end
-                return *this;
-            }
+            // if (_index == _sv->_size)
+            // {
+            //     // handle iterator at the end
+            //     return *this;
+            // }
             _index++;
             return *this;
         }
