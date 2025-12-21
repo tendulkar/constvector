@@ -24,43 +24,33 @@ public:
     class iterator
     {
     private:
-        int _index;
-        STLVector<T> *_sv;
+        T* _current_ptr;  // Cached pointer for single dereference
 
     public:
-        iterator(STLVector<T> *__sv, int __index = 0)
-            : _sv(__sv), _index(__index)
+        iterator(T* ptr)
+            : _current_ptr(ptr)
         {
         }
 
         inline STLVector<T>::iterator &operator++() noexcept
         {
-            // std::cout <<  "Operator++ is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            // if (_index == _sv->_size)
-            // {
-            //     // handle iterator at the end
-            //     return *this;
-            // }
-            _index++;
+            ++_current_ptr;
             return *this;
         }
 
         inline const T &operator*() const noexcept
         {
-            // std::cout <<  "Operator* is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            return _sv->_array[_index];
+            return *_current_ptr;  // Single dereference - same as ConstantVector
         }
 
         inline const bool operator==(const STLVector<T>::iterator &other) const noexcept
         {
-            // std::cout <<  "Operator== is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            return _index == other._index;
+            return _current_ptr == other._current_ptr;
         }
 
         inline const bool operator!=(const STLVector<T>::iterator &other) const noexcept
         {
-            // std::cout <<  "Operator != is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            return _index != other._index;
+            return _current_ptr != other._current_ptr;
         }
     };
 
@@ -173,14 +163,12 @@ public:
 
     inline iterator begin()
     {
-        if (empty())
-            return end();
-        return iterator(this, 0);
+        return iterator(_array);
     }
 
     inline iterator end()
     {
-        return iterator(this, _size);
+        return iterator(_array + _size);
     }
 };
 

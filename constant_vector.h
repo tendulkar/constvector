@@ -39,16 +39,17 @@ public:
     {
     private:
         T* _current_ptr;           // Direct pointer to current element
-        T* _block_end;             // Pointer to end of current block
+        T* _block_end;             // Pointer to end of current block  
+        T* _end_ptr;               // Pointer to absolute end (for comparison)
         int _iter_meta_index;      // Current block index
-        int _iter_index;           // Global index (for comparison with end())
         ConstantVector<T> *_sv;
 
     public:
-        iterator(ConstantVector<T> *__sv, int __iter_meta_index = 0, int __iter_array_index = 0, int __iter_index = 0)
-            : _sv(__sv), _iter_meta_index(__iter_meta_index), _iter_index(__iter_index)
+        // Constructor for begin()
+        iterator(ConstantVector<T> *__sv, int __iter_meta_index, int __iter_array_index, T* __end_ptr)
+            : _sv(__sv), _iter_meta_index(__iter_meta_index), _end_ptr(__end_ptr)
         {
-            if (__sv && __iter_index < static_cast<int>(__sv->_size)) {
+            if (__sv && __end_ptr) {
                 _current_ptr = __sv->_meta_array[__iter_meta_index] + __iter_array_index;
                 _block_end = __sv->_meta_array[__iter_meta_index] + (__SV_INITIAL_CAPACITY__ << __iter_meta_index);
             } else {
@@ -56,15 +57,21 @@ public:
                 _block_end = nullptr;
             }
         }
+        
+        // Constructor for end() - simple sentinel
+        iterator(T* end_sentinel)
+            : _current_ptr(end_sentinel), _block_end(nullptr), _end_ptr(end_sentinel), 
+              _iter_meta_index(-1), _sv(nullptr)
+        {
+        }
 
         inline ConstantVector<T>::iterator &operator++() noexcept
         {
             ++_current_ptr;
-            ++_iter_index;
             // Unlikely: crossed block boundary
             if (__builtin_expect(_current_ptr == _block_end, 0)) {
                 ++_iter_meta_index;
-                if (_iter_index < static_cast<int>(_sv->_size)) {
+                if (_current_ptr != _end_ptr) {
                     _current_ptr = _sv->_meta_array[_iter_meta_index];
                     _block_end = _current_ptr + (__SV_INITIAL_CAPACITY__ << _iter_meta_index);
                 }
@@ -74,17 +81,17 @@ public:
 
         inline const T &operator*() const noexcept
         {
-            return *_current_ptr;  // Single dereference - fast!
+            return *_current_ptr;  // Single dereference
         }
 
         inline const bool operator==(const ConstantVector<T>::iterator &other) const noexcept
         {
-            return _iter_index == other._iter_index;
+            return _current_ptr == other._current_ptr;
         }
 
         inline const bool operator!=(const ConstantVector<T>::iterator &other) const noexcept
         {
-            return _iter_index != other._iter_index;
+            return _current_ptr != other._current_ptr;
         }
     };
 
@@ -278,12 +285,16 @@ public:
     {
         if (empty())
             return end();
-        return iterator(this, _meta_start_offset, _first_array_start, 0);
+        // Pass end pointer for boundary comparison
+        T* end_ptr = _meta_array[_meta_index] + _last_array_index + 1;
+        return iterator(this, _meta_start_offset, _first_array_start, end_ptr);
     }
 
     inline iterator end()
     {
-        return iterator(this, -1, -1, _size);
+        // End sentinel - just the pointer
+        T* end_ptr = empty() ? nullptr : (_meta_array[_meta_index] + _last_array_index + 1);
+        return iterator(end_ptr);
     }
 };
 
