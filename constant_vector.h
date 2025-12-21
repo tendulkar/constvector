@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 
 #ifndef _CLASS_CONSTANT_VECTOR
 #define _CLASS_CONSTANT_VECTOR
@@ -100,6 +101,8 @@ public:
     ConstantVector() : _size(0), _meta_index(0), _current_block_capacity(__SV_INITIAL_CAPACITY__), _last_array_index(-1), _capacity(__SV_INITIAL_CAPACITY__), _zeroed_capacity(__SV_INITIAL_CAPACITY__), _meta_start_offset(0), _first_array_start(0)
     {
         _meta_array = _meta_alloc.allocate(64);
+        // Zero all pointers to ensure nullptr checks work correctly
+        std::fill(_meta_array, _meta_array + 64, nullptr);
         _meta_array[0] = _alloc.allocate(__SV_INITIAL_CAPACITY__);
     }
 
