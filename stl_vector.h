@@ -84,7 +84,13 @@ public:
         _array[_size++] = value;
     }
 
-    void pop_back()
+    void pop_back_no_shrink()
+    {
+         m_assert(_size, "STLVector is empty, but pop_back() called!");
+        --_size;
+    }
+
+    void pop_back_shrink()
     {
         m_assert(_size, "STLVector is empty, but pop_back() called!");
         --_size;
@@ -99,6 +105,11 @@ public:
             _alloc.deallocate(_array, 2 * _capacity);
             _array = _new_array;
         }
+    }
+
+    void pop_back()
+    {
+       pop_back_shrink();
     }
 
     inline T &operator[](size_t index) noexcept

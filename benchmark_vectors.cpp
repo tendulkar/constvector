@@ -167,11 +167,21 @@ int vectorPushPop(BaseVector &v, int n)
     return v.size();
 }
 
-int vectorPop(BaseVector &v, int n)
+int vectorPopShrink(BaseVector &v, int n)
 {
     for (int i = 0; i < n; i++)
     {
         v.pop_back();
+        ForceMemory(v);
+    }
+    return v.size();
+}
+
+int vectorPopNoShrink(BaseVector &v, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        v.pop_back_no_shrink();
         ForceMemory(v);
     }
     return v.size();
@@ -312,7 +322,7 @@ static void BM_VectorPush(benchmark::State &state)
 }
 
 
-static void BM_VectorPop(benchmark::State &state)
+static void BM_VectorPopShrink(benchmark::State &state)
 {
     // Perform setup here
     for (auto _ : state)
@@ -322,7 +332,21 @@ static void BM_VectorPop(benchmark::State &state)
         BaseVector v;
         vectorPush(v, state.range(0));
         state.ResumeTiming();
-        vectorPop(v, state.range(0));
+        vectorPopShrink(v, state.range(0));
+    }
+}
+
+static void BM_VectorPopNoShrink(benchmark::State &state)
+{
+    // Perform setup here
+    for (auto _ : state)
+    {
+        // This code gets timed
+        state.PauseTiming();
+        BaseVector v;
+        vectorPush(v, state.range(0));
+        state.ResumeTiming();
+        vectorPopNoShrink(v, state.range(0));
     }
 }
 
@@ -349,7 +373,7 @@ static void BM_VectorPushPop(benchmark::State &state)
     for (auto _ : state)
     {
         // This code gets timed
-        vectorPop(v, state.range(0));
+        vectorPopShrink(v, state.range(0));
     }
 }
 
@@ -391,7 +415,8 @@ BENCHMARK(BM_ConstantVectorPopNoShrink)->Iterations(ITERATIONS)->RangeMultiplier
 BENCHMARK(BM_ConstantVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_VectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_VectorPopShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_VectorPopNoShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 // Run the benchmark
