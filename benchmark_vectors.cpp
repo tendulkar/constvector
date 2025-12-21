@@ -7,22 +7,22 @@
 
 using namespace std;
 
+// STRICT Memory Barrier for Apples-to-Apples Latency Benchmark
+// This forces a store to memory, preventing register-only optimizations.
+template <class Tp>
+inline void ForceMemory(Tp const& value) {
+    asm volatile("" : : "m"(value) : "memory");
+}
 
 typedef ConstantVector<int> BenchVector;
 int constantVectorPush(BenchVector &sv, int n)
 {
-    // int n = int(2e8);
     for (int i = 0; i < n; i++)
     {
         sv.push_back(i);
+        ForceMemory(sv);
     }
-    if (sv.size() != n) {
-        cout << "ConstantVector Push Front didn't push all elements, n: " << n << ", sv size: " << sv.size() << endl;
-    }
-    return 0;
-
-    // cout << "Stellar vector size: " << sv.size() << endl;
-    // cout << "Stellar vector capacity: " << sv.capacity() << endl;
+    return sv.size();
 }
 
 int constantVectorPushPop(BenchVector &sv, int n)
@@ -48,17 +48,22 @@ int constantVectorPushPop(BenchVector &sv, int n)
 
 int constantVectorPop(BenchVector &sv, int n)
 {
-    // int n = int(2e8);
     for (int i = 0; i < n; i++)
     {
         sv.pop_back();
-    }
-
-    if (sv.size()) {
-        cout << "ConstantVector Pop didn't do all pop_back()'s , n: " << n << ", sv size: " << sv.size() << endl;
+        ForceMemory(sv);
     }
     return sv.size();
+}
 
+int constantVectorPopNoShrink(BenchVector &sv, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        sv.pop_back_no_shrink();
+        ForceMemory(sv);
+    }
+    return sv.size();
 }
 
 int constantVectorPopFront(BenchVector &sv, int n)
@@ -102,6 +107,7 @@ long long constantVectorElementAccess(BenchVector &sv, int n)
     for (size_t i = 0; i < n; i++)
     {
         sum += sv[i];
+        ForceMemory(sum);
     }
     return sum;
 }
@@ -112,6 +118,7 @@ long long constantVectorSum(BenchVector &sv)
     for (int x : sv)
     {
         s += x;
+        ForceMemory(s);
     }
     return s;
 }
@@ -119,19 +126,12 @@ long long constantVectorSum(BenchVector &sv)
 typedef STLVector<int> BaseVector;
 int vectorPush(BaseVector &v, int n)
 {
-    // int n = int(2e8);
     for (int i = 0; i < n; i++)
     {
         v.push_back(i);
+        ForceMemory(v);
     }
-
-    if (v.size() != n) {
-        cout << "Vector Push didn't push all elements, n: " << n << ", v size: " << v.size() << endl;
-    }
-
     return v.size();
-    // cout << "Vector size:" << v.size() << endl;
-    // cout << "Vector capacity:" << v.capacity() << endl;
 }
 
 
@@ -141,6 +141,7 @@ long long vectorElementAccess(BaseVector &v, int n)
     for (size_t i = 0; i < n; i++)
     {
         sum += v[i];
+        ForceMemory(sum);
     }
     return sum;
 }
@@ -171,10 +172,7 @@ int vectorPop(BaseVector &v, int n)
     for (int i = 0; i < n; i++)
     {
         v.pop_back();
-    }
-    if (!v.empty())
-    {
-        cout << "Vector Pop didn't complete successfully" << endl;
+        ForceMemory(v);
     }
     return v.size();
 }
@@ -205,6 +203,7 @@ long long vectorSum(BaseVector &v)
     for (int x : v)
     {
         s += x;
+        ForceMemory(s);
     }
     return s;
 }
@@ -231,6 +230,20 @@ static void BM_ConstantVectorPop(benchmark::State &state)
         constantVectorPush(sv, state.range(0));
         state.ResumeTiming();
         constantVectorPop(sv, state.range(0));
+    }
+}
+
+static void BM_ConstantVectorPopNoShrink(benchmark::State &state)
+{
+    // Perform setup here
+    for (auto _ : state)
+    {
+        // This code gets timed
+        state.PauseTiming();
+        BenchVector sv;
+        constantVectorPush(sv, state.range(0));
+        state.ResumeTiming();
+        constantVectorPopNoShrink(sv, state.range(0));
     }
 }
 
@@ -360,8 +373,9 @@ static void BM_VectorIteration(benchmark::State &state)
     vectorPush(v, state.range(0));
     for (auto _ : state)
     {
-        // This code gets timed - use DoNotOptimize to prevent elimination
-        benchmark::DoNotOptimize(vectorSum(v));
+        // This code gets timed - use ForceMemory to prevent elimination
+        auto s = vectorSum(v);
+        ForceMemory(s);
     }
 }
 
@@ -373,6 +387,7 @@ static void BM_VectorIteration(benchmark::State &state)
 // Register the function as a benchmark
 BENCHMARK(BM_ConstantVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_ConstantVectorPopNoShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);

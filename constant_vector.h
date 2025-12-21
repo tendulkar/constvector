@@ -165,11 +165,29 @@ public:
 
     /**
      * A function to remove the last element from the ConstantVector.
+     * Does NOT deallocate memory - fastest option, matches STL vector behavior.
+     */
+    inline void pop_back_no_shrink() noexcept
+    {
+        --_size;
+        if (__builtin_expect(--_last_array_index < 0, 0))
+        {
+            if (_meta_index > 0)
+            {
+                --_meta_index;
+                _current_block_capacity >>= 1;
+                _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
+            }
+        }
+    }
+
+    /**
+     * A function to remove the last element from the ConstantVector.
      * Deallocates array blocks when they become empty to maintain O(N) space.
      */
-    void pop_back()
+    void pop_back_shrink()
     {
-        m_assert(_size, "ConstantVector is empty, but pop_back() called!");
+        m_assert(_size, "ConstantVector is empty, but pop_back_shrink() called!");
         --_size;
         if (__builtin_expect(--_last_array_index < 0, 0))
         {
@@ -185,6 +203,9 @@ public:
             }
         }
     }
+
+    // Default pop_back uses shrink behavior  
+    inline void pop_back() { pop_back_shrink(); }
 
     inline void pop_front()
     {
