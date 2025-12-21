@@ -96,18 +96,14 @@ int constantVectorPopAndBack(BenchVector &sv, int n)
 }
 
 
-int constantVectorElementAccess(BenchVector &sv, int n)
+long long constantVectorElementAccess(BenchVector &sv, int n)
 {
-    // int n = sv.size();
+    long long sum = 0;
     for (size_t i = 0; i < n; i++)
     {
-        if (sv[i] != i)
-        {
-            cout << "Stellar vector element access Failed at index: " << i << ", sv[i]: " << sv[i] << endl;
-            return -1;
-        }
+        sum += sv[i];
     }
-    return 0;
+    return sum;
 }
 
 long long constantVectorSum(BenchVector &sv)
@@ -139,17 +135,14 @@ int vectorPush(BaseVector &v, int n)
 }
 
 
-int vectorElementAccess(BaseVector &v, int n)
+long long vectorElementAccess(BaseVector &v, int n)
 {
-    // int n = v.size();
+    long long sum = 0;
     for (size_t i = 0; i < n; i++)
     {
-        if (v[i] != i)
-        {
-            return -1;
-        }
+        sum += v[i];
     }
-    return 0;
+    return sum;
 }
 
 int vectorPushPop(BaseVector &v, int n)
@@ -276,8 +269,8 @@ static void BM_ConstantVectorAccess(benchmark::State &state)
 
     for (auto _ : state)
     {
-        // This code gets timed
-        constantVectorElementAccess(sv, state.range(0));
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(constantVectorElementAccess(sv, state.range(0)));
     }
 }
 
@@ -354,8 +347,8 @@ static void BM_VectorAccess(benchmark::State &state)
     vectorPush(v, state.range(0));
     for (auto _ : state)
     {
-        // This code gets timed
-        vectorElementAccess(v, state.range(0));
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(vectorElementAccess(v, state.range(0)));
     }
 }
 

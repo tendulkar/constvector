@@ -38,58 +38,48 @@ public:
     class iterator
     {
     private:
-        T* _current_ptr;           // Direct pointer to current element
-        T* _block_end;             // Pointer to end of current block  
-        T* _end_ptr;               // Pointer to absolute end (for comparison)
-        int _iter_meta_index;      // Current block index
-        ConstantVector<T> *_sv;
-
+        T* __restrict__ _current_ptr;  // Direct pointer to current element
+        T* _block_end;                  // Pointer to end of current block
+        T** _meta_ptr;                  // Pointer to current meta_array entry
+        
     public:
         // Constructor for begin()
-        iterator(ConstantVector<T> *__sv, int __iter_meta_index, int __iter_array_index, T* __end_ptr)
-            : _sv(__sv), _iter_meta_index(__iter_meta_index), _end_ptr(__end_ptr)
+        iterator(T** meta_ptr, int offset, T* block_end)
+            : _meta_ptr(meta_ptr), _block_end(block_end)
         {
-            if (__sv && __end_ptr) {
-                _current_ptr = __sv->_meta_array[__iter_meta_index] + __iter_array_index;
-                _block_end = __sv->_meta_array[__iter_meta_index] + (__SV_INITIAL_CAPACITY__ << __iter_meta_index);
-            } else {
-                _current_ptr = nullptr;
-                _block_end = nullptr;
-            }
+            _current_ptr = meta_ptr ? (*meta_ptr + offset) : nullptr;
         }
         
         // Constructor for end() - simple sentinel
         iterator(T* end_sentinel)
-            : _current_ptr(end_sentinel), _block_end(nullptr), _end_ptr(end_sentinel), 
-              _iter_meta_index(-1), _sv(nullptr)
+            : _current_ptr(end_sentinel), _block_end(nullptr), _meta_ptr(nullptr)
         {
         }
 
-        inline ConstantVector<T>::iterator &operator++() noexcept
+        inline iterator& operator++() noexcept
         {
             ++_current_ptr;
-            // Unlikely: crossed block boundary
-            if (__builtin_expect(_current_ptr == _block_end, 0)) {
-                ++_iter_meta_index;
-                if (_current_ptr != _end_ptr) {
-                    _current_ptr = _sv->_meta_array[_iter_meta_index];
-                    _block_end = _current_ptr + (__SV_INITIAL_CAPACITY__ << _iter_meta_index);
-                }
+            // Rarely taken: crossed block boundary
+            if (__builtin_expect(_current_ptr == _block_end, 0)) [[unlikely]] {
+                ++_meta_ptr;
+                _current_ptr = *_meta_ptr;
+                // Next block is 2x size of previous
+                _block_end = _current_ptr + ((_block_end - *(_meta_ptr - 1)) << 1);
             }
             return *this;
         }
 
-        inline const T &operator*() const noexcept
+        inline const T& operator*() const noexcept
         {
-            return *_current_ptr;  // Single dereference
+            return *_current_ptr;
         }
 
-        inline const bool operator==(const ConstantVector<T>::iterator &other) const noexcept
+        inline bool operator==(const iterator& other) const noexcept
         {
             return _current_ptr == other._current_ptr;
         }
 
-        inline const bool operator!=(const ConstantVector<T>::iterator &other) const noexcept
+        inline bool operator!=(const iterator& other) const noexcept
         {
             return _current_ptr != other._current_ptr;
         }
@@ -211,19 +201,14 @@ public:
         }
     }
 
-    inline T& operator[](size_type index) 
+    [[gnu::always_inline]] inline T& operator[](size_type index) noexcept
     {
-        m_assert(index < _size, "ConstantVector index out of bounds at operator[]!");
-        // Fast path for first block (indices 0 to __SV_INITIAL_CAPACITY__-1)
-        if (__builtin_expect(index < __SV_INITIAL_CAPACITY__, 1)) {
-            return _meta_array[0][index];
-        }
-        // General case: compute block index (j) and offset within block (k)
-        // j = floor(log2(adjusted)) - 3, k = adjusted - (8 << j)
-        const unsigned int adjusted = static_cast<unsigned int>(index + __SV_INITIAL_CAPACITY__);
-        const unsigned int j = __SV_MSB_BITS__ - __builtin_clz(adjusted);
-        const unsigned int k = adjusted - (__SV_INITIAL_CAPACITY__ << j);
-        return _meta_array[j][k];
+        // Branchless: compute block index using CLZ
+        // For index < 256: adjusted < 512, clz gives 23, j=0
+        // For index >= 256: j = floor(log2(index + 256)) - 8
+        const unsigned int adjusted = static_cast<unsigned int>(index) + __SV_INITIAL_CAPACITY__;
+        const unsigned int j = __SV_MSB_BITS__ - static_cast<unsigned int>(__builtin_clz(adjusted));
+        return _meta_array[j][adjusted - (__SV_INITIAL_CAPACITY__ << j)];
     }
 
 
@@ -285,9 +270,9 @@ public:
     {
         if (empty())
             return end();
-        // Pass end pointer for boundary comparison
-        T* end_ptr = _meta_array[_meta_index] + _last_array_index + 1;
-        return iterator(this, _meta_start_offset, _first_array_start, end_ptr);
+        // Pass meta_ptr, offset, and block_end
+        T* block_end = _meta_array[_meta_start_offset] + (__SV_INITIAL_CAPACITY__ << _meta_start_offset);
+        return iterator(&_meta_array[_meta_start_offset], _first_array_start, block_end);
     }
 
     inline iterator end()
