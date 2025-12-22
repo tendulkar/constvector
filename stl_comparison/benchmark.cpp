@@ -124,8 +124,8 @@ static void BM_StdVectorIteration(benchmark::State& state) {
         long long sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
             auto val = *it;
-            DoNotOptimize(val);  // Light barrier
             sum += val;
+            DoNotOptimize(sum);  // Light barrier
         }
         DoNotOptimize(sum);
     }
@@ -141,8 +141,8 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
         long long sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
             auto val = *it;
-            DoNotOptimize(val);  // Light barrier
             sum += val;
+            DoNotOptimize(sum);  // Light barrier
         }
         DoNotOptimize(sum);
     }
