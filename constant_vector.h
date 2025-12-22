@@ -31,7 +31,6 @@ private:
     size_type _first_array_start;
     size_type _zeroed_capacity;
     size_type _meta_start_offset;
-    T* __restrict__ _active_block; // Cache the current write block for speed
 
     allocator_type _alloc;
     meta_allocator_type _meta_alloc;
@@ -62,7 +61,7 @@ public:
         {
             ++_current_ptr;
             // Rarely taken: crossed block boundary
-            if (__builtin_expect(_current_ptr == _block_end, 0)) [[unlikely]] {
+            if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_current_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
                 ++_meta_ptr;
                 _current_ptr = *_meta_ptr;
                 // Next block is 2x size of previous
@@ -102,8 +101,7 @@ public:
         _meta_array = _meta_alloc.allocate(64);
         // Zero all pointers to ensure nullptr checks work correctly
         std::fill(_meta_array, _meta_array + 64, nullptr);
-        _active_block = _alloc.allocate(__SV_INITIAL_CAPACITY__);
-        _meta_array[0] = _active_block;
+        _meta_array[0] = _alloc.allocate(__SV_INITIAL_CAPACITY__);
     }
 
     /**
@@ -150,21 +148,19 @@ public:
      */
     void push_back(const T &value)
     {
-        if (__builtin_expect(static_cast<size_type>(++_last_array_index) == _current_block_capacity, 0))
+        ++_last_array_index;
+        if (__builtin_expect(!(static_cast<size_type>(_last_array_index) ^ _current_block_capacity), 0))
         {
             // Current block is full, allocate new block (no copy needed for O(1) worst case)
             _last_array_index = 0;
             ++_meta_index;
             _current_block_capacity <<= 1;  // Double the block capacity
             if (_meta_array[_meta_index] == nullptr) {
-                _active_block = _alloc.allocate(_current_block_capacity);
-                _meta_array[_meta_index] = _active_block;
+                _meta_array[_meta_index] = _alloc.allocate(_current_block_capacity);
                 _capacity += _current_block_capacity;
-            } else {
-                _active_block = _meta_array[_meta_index];
             }
         }
-        _active_block[_last_array_index] = value;
+        _meta_array[_meta_index][_last_array_index] = value;
         ++_size;
     }
 
@@ -177,11 +173,9 @@ public:
         --_size;
         if (__builtin_expect(--_last_array_index < 0, 0))
         {
-            // Branch to previous block (rare)
             if (_meta_index > 0)
             {
                 --_meta_index;
-                _active_block = _meta_array[_meta_index];
                 _current_block_capacity >>= 1;
                 _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
             }
@@ -202,11 +196,9 @@ public:
             {
                 // Free the empty array block - reduces fragmentation
                 _capacity -= _current_block_capacity;
-                _alloc.deallocate(_active_block, _current_block_capacity);
+                _alloc.deallocate(_meta_array[_meta_index], _current_block_capacity);
                 _meta_array[_meta_index] = nullptr;
-                
                 --_meta_index;
-                _active_block = _meta_array[_meta_index];
                 _current_block_capacity >>= 1;  // Halve the block capacity
                 _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
             }
@@ -224,7 +216,7 @@ public:
         _size--;
         _first_array_start++;
         _zeroed_capacity++;
-        if (_first_array_start == (__SV_INITIAL_CAPACITY__ << _meta_start_offset)) {
+        if (!(_first_array_start ^ (__SV_INITIAL_CAPACITY__ << _meta_start_offset))) {
             _alloc.deallocate(_meta_array[_meta_start_offset], _first_array_start);
             _meta_start_offset = (_meta_start_offset + 1) % 64;
             _first_array_start = 0;
@@ -295,7 +287,7 @@ public:
     {
         // std::cout << "Back() called: _meta_index: " << _meta_index << " _last_array_index: " << _last_array_index << std::endl;
         m_assert(_size, "ConstantVector is empty, but back() called!");
-        return _active_block[_last_array_index];
+        return _meta_array[_meta_index][_last_array_index];
     }
 
     inline iterator begin()
