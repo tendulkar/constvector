@@ -281,7 +281,8 @@ public:
 
     // === Capacity ===
     [[nodiscard]] bool empty() const noexcept { 
-        return _write_ptr == _blocks[0];  // Only true when at start of block 0
+        // Fast: compare cached pointers. Empty when write_ptr at block_start AND no full blocks
+        return _full_blocks_size == 0 && _write_ptr == _block_start;
     }
     
     size_type size() const noexcept { 

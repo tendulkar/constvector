@@ -47,6 +47,7 @@ static void BM_StdVectorPop(benchmark::State& state) {
         
         while (!v.empty()) {
             v.pop_back();
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(v);
     }
@@ -63,6 +64,7 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
         
         while (!v.empty()) {
             v.pop_back();
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(v);
     }
