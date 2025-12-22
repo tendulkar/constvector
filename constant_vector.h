@@ -31,6 +31,7 @@ private:
     size_type _first_array_start;
     size_type _zeroed_capacity;
     size_type _meta_start_offset;
+    T* __restrict__ _active_block; // Cache the current write block for speed
 
     allocator_type _alloc;
     meta_allocator_type _meta_alloc;
@@ -101,7 +102,8 @@ public:
         _meta_array = _meta_alloc.allocate(64);
         // Zero all pointers to ensure nullptr checks work correctly
         std::fill(_meta_array, _meta_array + 64, nullptr);
-        _meta_array[0] = _alloc.allocate(__SV_INITIAL_CAPACITY__);
+        _active_block = _alloc.allocate(__SV_INITIAL_CAPACITY__);
+        _meta_array[0] = _active_block;
     }
 
     /**
@@ -155,11 +157,14 @@ public:
             ++_meta_index;
             _current_block_capacity <<= 1;  // Double the block capacity
             if (_meta_array[_meta_index] == nullptr) {
-                _meta_array[_meta_index] = _alloc.allocate(_current_block_capacity);
+                _active_block = _alloc.allocate(_current_block_capacity);
+                _meta_array[_meta_index] = _active_block;
                 _capacity += _current_block_capacity;
+            } else {
+                _active_block = _meta_array[_meta_index];
             }
         }
-        _meta_array[_meta_index][_last_array_index] = value;
+        _active_block[_last_array_index] = value;
         ++_size;
     }
 
@@ -172,9 +177,11 @@ public:
         --_size;
         if (__builtin_expect(--_last_array_index < 0, 0))
         {
+            // Branch to previous block (rare)
             if (_meta_index > 0)
             {
                 --_meta_index;
+                _active_block = _meta_array[_meta_index];
                 _current_block_capacity >>= 1;
                 _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
             }
@@ -195,9 +202,11 @@ public:
             {
                 // Free the empty array block - reduces fragmentation
                 _capacity -= _current_block_capacity;
-                _alloc.deallocate(_meta_array[_meta_index], _current_block_capacity);
+                _alloc.deallocate(_active_block, _current_block_capacity);
                 _meta_array[_meta_index] = nullptr;
+                
                 --_meta_index;
+                _active_block = _meta_array[_meta_index];
                 _current_block_capacity >>= 1;  // Halve the block capacity
                 _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
             }
@@ -229,7 +238,9 @@ public:
         // For index >= 256: j = floor(log2(index + 256)) - 8
         const unsigned int adjusted = static_cast<unsigned int>(index) + __SV_INITIAL_CAPACITY__;
         const unsigned int j = __SV_MSB_BITS__ - static_cast<unsigned int>(__builtin_clz(adjusted));
-        return _meta_array[j][adjusted - (__SV_INITIAL_CAPACITY__ << j)];
+        // Use XOR instead of subtraction: since we know the MSB is set, XOR clears it.
+        // equivalent to: index_in_block = adjusted - (1 << (j + 8))
+        return _meta_array[j][adjusted ^ (__SV_INITIAL_CAPACITY__ << j)];
     }
 
 
@@ -284,7 +295,7 @@ public:
     {
         // std::cout << "Back() called: _meta_index: " << _meta_index << " _last_array_index: " << _last_array_index << std::endl;
         m_assert(_size, "ConstantVector is empty, but back() called!");
-        return _meta_array[_meta_index][_last_array_index];
+        return _active_block[_last_array_index];
     }
 
     inline iterator begin()
