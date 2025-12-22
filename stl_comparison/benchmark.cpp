@@ -42,15 +42,16 @@ static void BM_StdVectorPop(benchmark::State& state) {
     for (auto _ : state) {
         state.PauseTiming();
         std::vector<int> v;
-        for (int i = 0; i < state.range(0); ++i) {
+        int n = state.range(0);
+        for (int i = 0; i < n; ++i) {
             v.push_back(i);
         }
         state.ResumeTiming();
         
-        while (!v.empty()) {
+        // Use counted loop - no empty() overhead
+        for (int i = 0; i < n; ++i) {
             v.pop_back();
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Use capacity - simple member access for both
+            DoNotOptimize(i);  // Use loop counter - same overhead for both
         }
         DoNotOptimize(v);
     }
@@ -60,15 +61,16 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
     for (auto _ : state) {
         state.PauseTiming();
         cv::vector<int> v;
-        for (int i = 0; i < state.range(0); ++i) {
+        int n = state.range(0);
+        for (int i = 0; i < n; ++i) {
             v.push_back(i);
         }
         state.ResumeTiming();
         
-        while (!v.empty()) {
+        // Use counted loop - no empty() overhead
+        for (int i = 0; i < n; ++i) {
             v.pop_back();
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Use capacity - simple member access for both
+            DoNotOptimize(i);  // Use loop counter - same overhead for both
         }
         DoNotOptimize(v);
     }
