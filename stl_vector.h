@@ -45,12 +45,12 @@ public:
 
         inline const bool operator==(const STLVector<T>::iterator &other) const noexcept
         {
-            return _current_ptr == other._current_ptr;
+            return !(reinterpret_cast<uintptr_t>(_current_ptr) ^ reinterpret_cast<uintptr_t>(other._current_ptr));
         }
 
         inline const bool operator!=(const STLVector<T>::iterator &other) const noexcept
         {
-            return _current_ptr != other._current_ptr;
+            return reinterpret_cast<uintptr_t>(_current_ptr) ^ reinterpret_cast<uintptr_t>(other._current_ptr);
         }
     };
 
@@ -70,9 +70,9 @@ public:
 
     void push_back(const T &value)
     {
-        if (__builtin_expect(_size == _capacity, 0))
+        if (__builtin_expect(!(_size ^ _capacity), 0))
         {
-            _capacity *= 2;
+            _capacity <<= 1;
             T *_new_array = _alloc.allocate(_capacity);
             for (int i = 0; i < _size; i++)
             {
