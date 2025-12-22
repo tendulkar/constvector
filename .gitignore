@@ -1,0 +1,16 @@
+# Build artifacts
+*.out
+*.o
+*.s
+
+# Executables from ad-hoc tests
+simple_perf
+simple_perf_nounroll
+simple_perf_pragma
+medium_perf
+small_perf
+unrolled_perf
+loop_comparison
+pop_perf
+
+

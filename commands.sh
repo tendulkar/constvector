@@ -1,0 +1,1 @@
+g++ -std=c++23 -O3 -march=native -flto -DNDEBUG -fno-omit-frame-pointer benchmark_vectors.cpp -isystem /Users/yugandhar/code/github.com/google/benchmark/include -L/Users/yugandhar/code/github.com/google/benchmark/build/src -lbenchmark -lpthread -o benchmark_vectors.out

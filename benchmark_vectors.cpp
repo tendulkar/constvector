@@ -7,22 +7,22 @@
 
 using namespace std;
 
+// STRICT Memory Barrier for Apples-to-Apples Latency Benchmark
+// This forces a store to memory, preventing register-only optimizations.
+template <class Tp>
+inline void ForceMemory(Tp const& value) {
+    asm volatile("" : : "m"(value) : "memory");
+}
 
 typedef ConstantVector<int> BenchVector;
 int constantVectorPush(BenchVector &sv, int n)
 {
-    // int n = int(2e8);
     for (int i = 0; i < n; i++)
     {
         sv.push_back(i);
+        ForceMemory(sv);
     }
-    if (sv.size() != n) {
-        cout << "ConstantVector Push Front didn't push all elements, n: " << n << ", sv size: " << sv.size() << endl;
-    }
-    return 0;
-
-    // cout << "Stellar vector size: " << sv.size() << endl;
-    // cout << "Stellar vector capacity: " << sv.capacity() << endl;
+    return sv.size();
 }
 
 int constantVectorPushPop(BenchVector &sv, int n)
@@ -46,19 +46,24 @@ int constantVectorPushPop(BenchVector &sv, int n)
     // cout << "Stellar vector capacity: " << sv.capacity() << endl;
 }
 
-int constantVectorPop(BenchVector &sv, int n)
+int constantVectorPopShrink(BenchVector &sv, int n)
 {
-    // int n = int(2e8);
     for (int i = 0; i < n; i++)
     {
         sv.pop_back();
-    }
-
-    if (sv.size()) {
-        cout << "ConstantVector Pop didn't do all pop_back()'s , n: " << n << ", sv size: " << sv.size() << endl;
+        ForceMemory(sv);
     }
     return sv.size();
+}
 
+int constantVectorPopNoShrink(BenchVector &sv, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        sv.pop_back_no_shrink();
+        ForceMemory(sv);
+    }
+    return sv.size();
 }
 
 int constantVectorPopFront(BenchVector &sv, int n)
@@ -96,18 +101,15 @@ int constantVectorPopAndBack(BenchVector &sv, int n)
 }
 
 
-int constantVectorElementAccess(BenchVector &sv, int n)
+long long constantVectorElementAccess(BenchVector &sv, int n)
 {
-    // int n = sv.size();
+    long long sum = 0;
     for (size_t i = 0; i < n; i++)
     {
-        if (sv[i] != i)
-        {
-            cout << "Stellar vector element access Failed at index: " << i << ", sv[i]: " << sv[i] << endl;
-            return -1;
-        }
+        sum += sv[i];
+        ForceMemory(sum);
     }
-    return 0;
+    return sum;
 }
 
 long long constantVectorSum(BenchVector &sv)
@@ -116,6 +118,7 @@ long long constantVectorSum(BenchVector &sv)
     for (int x : sv)
     {
         s += x;
+        ForceMemory(s);
     }
     return s;
 }
@@ -123,33 +126,24 @@ long long constantVectorSum(BenchVector &sv)
 typedef STLVector<int> BaseVector;
 int vectorPush(BaseVector &v, int n)
 {
-    // int n = int(2e8);
     for (int i = 0; i < n; i++)
     {
         v.push_back(i);
+        ForceMemory(v);
     }
-
-    if (v.size() != n) {
-        cout << "Vector Push didn't push all elements, n: " << n << ", v size: " << v.size() << endl;
-    }
-
     return v.size();
-    // cout << "Vector size:" << v.size() << endl;
-    // cout << "Vector capacity:" << v.capacity() << endl;
 }
 
 
-int vectorElementAccess(BaseVector &v, int n)
+long long vectorElementAccess(BaseVector &v, int n)
 {
-    // int n = v.size();
+    long long sum = 0;
     for (size_t i = 0; i < n; i++)
     {
-        if (v[i] != i)
-        {
-            return -1;
-        }
+        sum += v[i];
+        ForceMemory(sum);
     }
-    return 0;
+    return sum;
 }
 
 int vectorPushPop(BaseVector &v, int n)
@@ -173,15 +167,22 @@ int vectorPushPop(BaseVector &v, int n)
     return v.size();
 }
 
-int vectorPop(BaseVector &v, int n)
+int vectorPopShrink(BaseVector &v, int n)
 {
     for (int i = 0; i < n; i++)
     {
         v.pop_back();
+        ForceMemory(v);
     }
-    if (!v.empty())
+    return v.size();
+}
+
+int vectorPopNoShrink(BaseVector &v, int n)
+{
+    for (int i = 0; i < n; i++)
     {
-        cout << "Vector Pop didn't complete successfully" << endl;
+        v.pop_back_no_shrink();
+        ForceMemory(v);
     }
     return v.size();
 }
@@ -212,6 +213,7 @@ long long vectorSum(BaseVector &v)
     for (int x : v)
     {
         s += x;
+        ForceMemory(s);
     }
     return s;
 }
@@ -227,7 +229,7 @@ static void BM_ConstantVectorPush(benchmark::State &state)
     }
 }
 
-static void BM_ConstantVectorPop(benchmark::State &state)
+static void BM_ConstantVectorPopShrink(benchmark::State &state)
 {
     // Perform setup here
     for (auto _ : state)
@@ -237,7 +239,21 @@ static void BM_ConstantVectorPop(benchmark::State &state)
         BenchVector sv;
         constantVectorPush(sv, state.range(0));
         state.ResumeTiming();
-        constantVectorPop(sv, state.range(0));
+        constantVectorPopShrink(sv, state.range(0));
+    }
+}
+
+static void BM_ConstantVectorPopNoShrink(benchmark::State &state)
+{
+    // Perform setup here
+    for (auto _ : state)
+    {
+        // This code gets timed
+        state.PauseTiming();
+        BenchVector sv;
+        constantVectorPush(sv, state.range(0));
+        state.ResumeTiming();
+        constantVectorPopNoShrink(sv, state.range(0));
     }
 }
 
@@ -276,8 +292,8 @@ static void BM_ConstantVectorAccess(benchmark::State &state)
 
     for (auto _ : state)
     {
-        // This code gets timed
-        constantVectorElementAccess(sv, state.range(0));
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(constantVectorElementAccess(sv, state.range(0)));
     }
 }
 
@@ -289,8 +305,8 @@ static void BM_ConstantVectorIteration(benchmark::State &state)
 
     for (auto _ : state)
     {
-        // This code gets timed
-        constantVectorSum(sv);
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(constantVectorSum(sv));
     }
 }
 
@@ -306,7 +322,7 @@ static void BM_VectorPush(benchmark::State &state)
 }
 
 
-static void BM_VectorPop(benchmark::State &state)
+static void BM_VectorPopShrink(benchmark::State &state)
 {
     // Perform setup here
     for (auto _ : state)
@@ -316,7 +332,21 @@ static void BM_VectorPop(benchmark::State &state)
         BaseVector v;
         vectorPush(v, state.range(0));
         state.ResumeTiming();
-        vectorPop(v, state.range(0));
+        vectorPopShrink(v, state.range(0));
+    }
+}
+
+static void BM_VectorPopNoShrink(benchmark::State &state)
+{
+    // Perform setup here
+    for (auto _ : state)
+    {
+        // This code gets timed
+        state.PauseTiming();
+        BaseVector v;
+        vectorPush(v, state.range(0));
+        state.ResumeTiming();
+        vectorPopNoShrink(v, state.range(0));
     }
 }
 
@@ -343,7 +373,7 @@ static void BM_VectorPushPop(benchmark::State &state)
     for (auto _ : state)
     {
         // This code gets timed
-        vectorPop(v, state.range(0));
+        vectorPopShrink(v, state.range(0));
     }
 }
 
@@ -354,8 +384,8 @@ static void BM_VectorAccess(benchmark::State &state)
     vectorPush(v, state.range(0));
     for (auto _ : state)
     {
-        // This code gets timed
-        vectorElementAccess(v, state.range(0));
+        // This code gets timed - use DoNotOptimize to prevent elimination
+        benchmark::DoNotOptimize(vectorElementAccess(v, state.range(0)));
     }
 }
 
@@ -367,26 +397,27 @@ static void BM_VectorIteration(benchmark::State &state)
     vectorPush(v, state.range(0));
     for (auto _ : state)
     {
-        // This code gets timed
-        vectorSum(v);
+        // This code gets timed - use ForceMemory to prevent elimination
+        auto s = vectorSum(v);
+        ForceMemory(s);
     }
 }
 
-#define ITERATIONS 10
-#define START_SIZE 1000
-#define END_SIZE int(1e9)
+#define ITERATIONS 30           // Statistically significant (n>=30 for CLT)
+#define START_SIZE int(10)
+#define END_SIZE int(1e8)
 #define RANGE_MULTIPLIER 10
 
 // Register the function as a benchmark
 BENCHMARK(BM_ConstantVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_ConstantVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_ConstantVectorPopShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_ConstantVectorPopNoShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_ConstantVectorPopAndBack)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_VectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_VectorPopShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_VectorPopNoShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
-BENCHMARK(BM_VectorPopAndBack)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_VectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 // Run the benchmark
 BENCHMARK_MAIN();

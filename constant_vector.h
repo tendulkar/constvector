@@ -1,12 +1,14 @@
 #include <iostream>
+#include <algorithm>
+#include <cassert>
 
 #ifndef _CLASS_CONSTANT_VECTOR
 #define _CLASS_CONSTANT_VECTOR
 
-#define __SV_INITIAL_CAPACITY__ 8
-#define __SV_INITIAL_CAPACITY_BITS__ 3
-// 32 -1 -3
-#define __SV_MSB_BITS__ 28
+constexpr size_t __SV_INITIAL_CAPACITY__ = 256;
+constexpr size_t __SV_INITIAL_CAPACITY_BITS__ = 8;
+// 32 - 1 - 8 = 23 for 32-bit CLZ
+constexpr size_t __SV_MSB_BITS__ = 23;
 
 #ifndef m_assert
 #define m_assert(expr, msg) assert(((void)(msg), (expr)))
@@ -24,6 +26,7 @@ private:
     size_type _size;
     size_type _capacity;
     size_type _meta_index;
+    size_type _current_block_capacity;  // Cached: __SV_INITIAL_CAPACITY__ << _meta_index
     long long _last_array_index;
     size_type _first_array_start;
     size_type _zeroed_capacity;
@@ -36,52 +39,50 @@ public:
     class iterator
     {
     private:
-        int _iter_meta_index;
-        int _iter_last_array_index;
-        int _iter_index;
-        ConstantVector<T> *_sv;
-
+        T* __restrict__ _current_ptr;  // Direct pointer to current element
+        T* _block_end;                  // Pointer to end of current block
+        T** _meta_ptr;                  // Pointer to current meta_array entry
+        
     public:
-        iterator(ConstantVector<T> *__sv, int __iter_meta_index = 0, int __iter_last_array_index = 0, int __iter_index = 0)
-            : _sv(__sv), _iter_meta_index(__iter_meta_index), _iter_last_array_index(__iter_last_array_index), _iter_index(__iter_index)
+        // Constructor for begin()
+        iterator(T** meta_ptr, int offset, T* block_end)
+            : _meta_ptr(meta_ptr), _block_end(block_end)
+        {
+            _current_ptr = meta_ptr ? (*meta_ptr + offset) : nullptr;
+        }
+        
+        // Constructor for end() - simple sentinel
+        iterator(T* end_sentinel)
+            : _current_ptr(end_sentinel), _block_end(nullptr), _meta_ptr(nullptr)
         {
         }
 
-        inline ConstantVector<T>::iterator &operator++() noexcept
+        inline iterator& operator++() noexcept
         {
-            // std::cout <<  "Operator++ is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            if (_iter_index == _sv->_size)
-            {
-                // handle iterator at the end
-                return *this;
+            ++_current_ptr;
+            // Rarely taken: crossed block boundary
+            if (__builtin_expect(_current_ptr == _block_end, 0)) [[unlikely]] {
+                ++_meta_ptr;
+                _current_ptr = *_meta_ptr;
+                // Next block is 2x size of previous
+                _block_end = _current_ptr + ((_block_end - *(_meta_ptr - 1)) << 1);
             }
-            _iter_last_array_index++;
-            if (_iter_last_array_index == (1 << (_iter_meta_index + __SV_INITIAL_CAPACITY_BITS__)))
-            {
-                // case of at the end of existing array, so need to iterate on the next array
-                _iter_last_array_index = 0;
-                _iter_meta_index++;
-            }
-            _iter_index++;
             return *this;
         }
 
-        inline const T &operator*() const noexcept
+        inline const T& operator*() const noexcept
         {
-            // std::cout <<  "Operator* is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            return _sv->_meta_array[_iter_meta_index][_iter_last_array_index];
+            return *_current_ptr;
         }
 
-        inline const bool operator==(const ConstantVector<T>::iterator &other) const noexcept
+        inline bool operator==(const iterator& other) const noexcept
         {
-            // std::cout <<  "Operator== is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            return _iter_index == other._iter_index;
+            return _current_ptr == other._current_ptr;
         }
 
-        inline const bool operator!=(const ConstantVector<T>::iterator &other) const noexcept
+        inline bool operator!=(const iterator& other) const noexcept
         {
-            // std::cout <<  "Operator != is called " << "idx: " << _iter_index << " meta: " << _iter_meta_index << " last: " << _iter_last_array_index << std::endl;
-            return _iter_index != other._iter_index;
+            return _current_ptr != other._current_ptr;
         }
     };
 
@@ -95,9 +96,11 @@ public:
      *
      * @throws None
      */
-    ConstantVector() : _size(0), _meta_index(0), _last_array_index(-1), _capacity(__SV_INITIAL_CAPACITY__), _zeroed_capacity(__SV_INITIAL_CAPACITY__), _meta_start_offset(0), _first_array_start(0)
+    ConstantVector() : _size(0), _meta_index(0), _current_block_capacity(__SV_INITIAL_CAPACITY__), _last_array_index(-1), _capacity(__SV_INITIAL_CAPACITY__), _zeroed_capacity(__SV_INITIAL_CAPACITY__), _meta_start_offset(0), _first_array_start(0)
     {
         _meta_array = _meta_alloc.allocate(64);
+        // Zero all pointers to ensure nullptr checks work correctly
+        std::fill(_meta_array, _meta_array + 64, nullptr);
         _meta_array[0] = _alloc.allocate(__SV_INITIAL_CAPACITY__);
     }
 
@@ -146,43 +149,64 @@ public:
     void push_back(const T &value)
     {
         ++_last_array_index;
-        if (_last_array_index == (__SV_INITIAL_CAPACITY__ << _meta_index))
+        if (__builtin_expect(static_cast<size_type>(_last_array_index) == _current_block_capacity, 0))
         {
-            // case of all arrays got full, need to allocate new array and don't do any copy, to support worst case of O(1)
+            // Current block is full, allocate new block (no copy needed for O(1) worst case)
             _last_array_index = 0;
-            _meta_index = (_meta_index + 1) % 64;
-            if(_meta_array[_meta_index] == nullptr) {
-                _meta_array[_meta_index] = _alloc.allocate(__SV_INITIAL_CAPACITY__ << _meta_index);
-                _capacity += (__SV_INITIAL_CAPACITY__ << _meta_index);
+            ++_meta_index;
+            _current_block_capacity <<= 1;  // Double the block capacity
+            if (_meta_array[_meta_index] == nullptr) {
+                _meta_array[_meta_index] = _alloc.allocate(_current_block_capacity);
+                _capacity += _current_block_capacity;
             }
         }
         _meta_array[_meta_index][_last_array_index] = value;
-        _size++;
+        ++_size;
     }
 
     /**
      * A function to remove the last element from the ConstantVector.
-     * Checks for vector has any elements or not
+     * Does NOT deallocate memory - fastest option, matches STL vector behavior.
      */
-    void pop_back()
+    inline void pop_back_no_shrink() noexcept
     {
-        // std::cout << "Pop back called, _meta_index: " << _meta_index << ", _last_array_index: " << _last_array_index << std::endl;
-        m_assert(_size, "ConstantVector is empty, but pop_back() called!");
-        _last_array_index--;
-        _size--;
-        if (_last_array_index < 0)
+        --_size;
+        if (__builtin_expect(--_last_array_index < 0, 0))
         {
-            // the last array is empty, free the whole array, and the freed memory part is avaialble for operating system to allocate
-            // since we're returning large array to the operating system, it should create less fragmentation
-            _capacity -= (__SV_INITIAL_CAPACITY__ << _meta_index);
-            // std::cout << "Stellar vector Pop back called, _meta_index: " << _meta_index << ", _last_array_index: " << _last_array_index << ", capacity" << _capacity << ", size: "<< _size << std::endl;
-
-            _alloc.deallocate(_meta_array[_meta_index], __SV_INITIAL_CAPACITY__ << _meta_index);
-            _meta_array[_meta_index] = nullptr;
-            _meta_index = (_meta_index + 64 - 1)% 64;
-            _last_array_index = (__SV_INITIAL_CAPACITY__ << _meta_index) - 1;
+            if (_meta_index > 0)
+            {
+                --_meta_index;
+                _current_block_capacity >>= 1;
+                _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
+            }
         }
     }
+
+    /**
+     * A function to remove the last element from the ConstantVector.
+     * Deallocates array blocks when they become empty to maintain O(N) space.
+     */
+    void pop_back_shrink()
+    {
+        m_assert(_size, "ConstantVector is empty, but pop_back_shrink() called!");
+        --_size;
+        if (__builtin_expect(--_last_array_index < 0, 0))
+        {
+            if (_meta_index > 0)
+            {
+                // Free the empty array block - reduces fragmentation
+                _capacity -= _current_block_capacity;
+                _alloc.deallocate(_meta_array[_meta_index], _current_block_capacity);
+                _meta_array[_meta_index] = nullptr;
+                --_meta_index;
+                _current_block_capacity >>= 1;  // Halve the block capacity
+                _last_array_index = static_cast<long long>(_current_block_capacity) - 1;
+            }
+        }
+    }
+
+    // Default pop_back uses shrink behavior  
+    inline void pop_back() { pop_back_shrink(); }
 
     inline void pop_front()
     {
@@ -199,19 +223,20 @@ public:
         }
     }
 
-    inline T& operator[](size_type index) 
+    [[gnu::always_inline]] inline T& operator[](size_type index) noexcept
     {
-        m_assert(index < _size, "ConstantVector index out of bounds at operator[]!");
-        // The expression `(31 - 3) - __builtin_clz(index + 8)` is optimal representation of `floor(log2(index+8)) - 3`
-        int j = (__SV_MSB_BITS__ - __builtin_clz(index + __SV_INITIAL_CAPACITY__));
-        int k = (index + __SV_INITIAL_CAPACITY__) - (__SV_INITIAL_CAPACITY__ << j);
-        return _meta_array[j][k];
+        // Branchless: compute block index using CLZ
+        // For index < 256: adjusted < 512, clz gives 23, j=0
+        // For index >= 256: j = floor(log2(index + 256)) - 8
+        const unsigned int adjusted = static_cast<unsigned int>(index) + __SV_INITIAL_CAPACITY__;
+        const unsigned int j = __SV_MSB_BITS__ - static_cast<unsigned int>(__builtin_clz(adjusted));
+        return _meta_array[j][adjusted - (__SV_INITIAL_CAPACITY__ << j)];
     }
 
 
     inline const T &at(size_type index)
     {
-        return this[index];
+        return (*this)[index];
     }
 
     /**
@@ -267,12 +292,16 @@ public:
     {
         if (empty())
             return end();
-        return iterator(this, _meta_start_offset, _first_array_start, 0);
+        // Pass meta_ptr, offset, and block_end
+        T* block_end = _meta_array[_meta_start_offset] + (__SV_INITIAL_CAPACITY__ << _meta_start_offset);
+        return iterator(&_meta_array[_meta_start_offset], _first_array_start, block_end);
     }
 
     inline iterator end()
     {
-        return iterator(this, -1, -1, _size);
+        // End sentinel - just the pointer
+        T* end_ptr = empty() ? nullptr : (_meta_array[_meta_index] + _last_array_index + 1);
+        return iterator(end_ptr);
     }
 };
 
