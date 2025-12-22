@@ -106,8 +106,12 @@ public:
             ++_ptr;
             if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
                 ++_block_ptr;
-                _ptr = *_block_ptr;
-                _block_end = _ptr + ((_block_end - *(_block_ptr - 1)) << 1);
+                // Only advance if next block exists (lazy allocation support)
+                if (*_block_ptr) {
+                    _ptr = *_block_ptr;
+                    _block_end = _ptr + ((_block_end - *(_block_ptr - 1)) << 1);
+                }
+                // else: _ptr stays at _block_end, which equals end()
             }
             return *this;
         }
@@ -144,8 +148,12 @@ public:
             ++_ptr;
             if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
                 ++_block_ptr;
-                _ptr = *_block_ptr;
-                _block_end = _ptr + ((_block_end - *(_block_ptr - 1)) << 1);
+                // Only advance if next block exists (lazy allocation support)
+                if (*_block_ptr) {
+                    _ptr = *_block_ptr;
+                    _block_end = _ptr + ((_block_end - *(_block_ptr - 1)) << 1);
+                }
+                // else: _ptr stays at _block_end, which equals end()
             }
             return *this;
         }
@@ -363,31 +371,31 @@ public:
     }
 
     // === Modifiers ===
-    // Optimized push_back - matches std::vector's *__end_++ = value pattern
+    // Optimized push_back - check boundary before write for lazy allocation
     void push_back(const T& value) {
-        *_write_ptr = value;
-        ++_write_ptr;
         if (__builtin_expect(_write_ptr == _block_end, 0)) [[unlikely]] {
             _advance_block();
         }
+        *_write_ptr = value;
+        ++_write_ptr;
     }
 
     void push_back(T&& value) {
-        *_write_ptr = std::move(value);
-        ++_write_ptr;
         if (__builtin_expect(_write_ptr == _block_end, 0)) [[unlikely]] {
             _advance_block();
         }
+        *_write_ptr = std::move(value);
+        ++_write_ptr;
     }
 
     template <typename... Args>
     reference emplace_back(Args&&... args) {
-        std::allocator_traits<Allocator>::construct(_alloc, _write_ptr, std::forward<Args>(args)...);
-        T& ref = *_write_ptr;
-        ++_write_ptr;
         if (__builtin_expect(_write_ptr == _block_end, 0)) [[unlikely]] {
             _advance_block();
         }
+        std::allocator_traits<Allocator>::construct(_alloc, _write_ptr, std::forward<Args>(args)...);
+        T& ref = *_write_ptr;
+        ++_write_ptr;
         return ref;
     }
 

@@ -20,7 +20,7 @@ static void BM_StdVectorPush(benchmark::State& state) {
         std::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
-            benchmark::ClobberMemory();  // Prevent loop optimization
+            DoNotOptimize(v.back());  // Use back() - depends on push, equal for both
         }
         DoNotOptimize(v);
     }
@@ -31,7 +31,7 @@ static void BM_ConstantVectorPush(benchmark::State& state) {
         cv::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
-            benchmark::ClobberMemory();  // Prevent loop optimization
+            DoNotOptimize(v.back());  // Use back() - depends on push, equal for both
         }
         DoNotOptimize(v);
     }
@@ -49,7 +49,8 @@ static void BM_StdVectorPop(benchmark::State& state) {
         
         while (!v.empty()) {
             v.pop_back();
-            benchmark::ClobberMemory();  // Prevent loop optimization
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Use capacity - simple member access for both
         }
         DoNotOptimize(v);
     }
@@ -66,7 +67,8 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
         
         while (!v.empty()) {
             v.pop_back();
-            benchmark::ClobberMemory();  // Prevent loop optimization
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Use capacity - simple member access for both
         }
         DoNotOptimize(v);
     }
@@ -82,8 +84,9 @@ static void BM_StdVectorAccess(benchmark::State& state) {
     for (auto _ : state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
-            sum += v[i];
-            benchmark::ClobberMemory();  // Prevent loop optimization
+            auto val = v[i];
+            DoNotOptimize(val);  // Light barrier - prevents DCE, allows vectorization
+            sum += val;
         }
         DoNotOptimize(sum);
     }
@@ -98,8 +101,9 @@ static void BM_ConstantVectorAccess(benchmark::State& state) {
     for (auto _ : state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
-            sum += v[i];
-            benchmark::ClobberMemory();  // Prevent loop optimization
+            auto val = v[i];
+            DoNotOptimize(val);  // Light barrier - prevents DCE, allows vectorization
+            sum += val;
         }
         DoNotOptimize(sum);
     }
@@ -114,9 +118,10 @@ static void BM_StdVectorIteration(benchmark::State& state) {
     
     for (auto _ : state) {
         long long sum = 0;
-        for (int x : v) {
-            sum += x;
-            benchmark::ClobberMemory();  // Prevent loop optimization
+        for (auto it = v.begin(); it != v.end(); ++it) {
+            auto val = *it;
+            DoNotOptimize(val);  // Light barrier
+            sum += val;
         }
         DoNotOptimize(sum);
     }
@@ -130,9 +135,10 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
     
     for (auto _ : state) {
         long long sum = 0;
-        for (int x : v) {
-            sum += x;
-            benchmark::ClobberMemory();  // Prevent loop optimization
+        for (auto it = v.begin(); it != v.end(); ++it) {
+            auto val = *it;
+            DoNotOptimize(val);  // Light barrier
+            sum += val;
         }
         DoNotOptimize(sum);
     }
