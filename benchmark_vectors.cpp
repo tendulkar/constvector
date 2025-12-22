@@ -405,7 +405,7 @@ static void BM_VectorIteration(benchmark::State &state)
 
 #define ITERATIONS 30           // Statistically significant (n>=30 for CLT)
 #define START_SIZE int(10)
-#define END_SIZE int(1e8)
+#define END_SIZE int(1e6)
 #define RANGE_MULTIPLIER 10
 
 // Register the function as a benchmark
