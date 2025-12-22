@@ -51,7 +51,8 @@ static void BM_StdVectorPop(benchmark::State& state) {
         // Use counted loop - no empty() overhead
         for (int i = 0; i < n; ++i) {
             v.pop_back();
-            DoNotOptimize(i);  // Use loop counter - same overhead for both
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Use capacity - simple member access for both
         }
         DoNotOptimize(v);
     }
@@ -70,7 +71,8 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
         // Use counted loop - no empty() overhead
         for (int i = 0; i < n; ++i) {
             v.pop_back();
-            DoNotOptimize(i);  // Use loop counter - same overhead for both
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Use capacity - simple member access for both
         }
         DoNotOptimize(v);
     }
