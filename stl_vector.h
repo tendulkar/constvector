@@ -72,7 +72,7 @@ public:
     {
         if (__builtin_expect(!(_size ^ _capacity), 0))
         {
-            _capacity *= 2;
+            _capacity <<= 1;
             T *_new_array = _alloc.allocate(_capacity);
             for (int i = 0; i < _size; i++)
             {
