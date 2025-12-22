@@ -88,6 +88,27 @@ Benchmark code in `stl_comparison/` directory.
 - **Access**: std::vector is faster (contiguous memory vs block lookup)
 - **Iteration**: Similar performance - good cache locality within blocks
 
+### Iterator Compliance
+
+`cv::vector` iterators are designed to be compatible with standard C++ forward iterators. The following features are implemented on par with `std::vector`:
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| `iterator_category` | ✅ | `forward_iterator_tag` |
+| Default constructor | ✅ | `iterator()`, `const_iterator()` |
+| Pre-increment `++it` | ✅ | O(1) with rare block transition |
+| Post-increment `it++` | ✅ | Returns copy, then increments |
+| Dereference `*it` | ✅ | Direct pointer dereference |
+| Arrow `it->member` | ✅ | Returns pointer |
+| Comparison `==`, `!=` | ✅ | Pointer comparison |
+| `iterator` → `const_iterator` | ✅ | Implicit conversion |
+| Cross-type comparison | ✅ | `it == cit` works |
+| `base()` accessor | ✅ | Returns underlying pointer |
+| `begin()` / `end()` | ✅ | Both mutable and const versions |
+| `cbegin()` / `cend()` | ✅ | Const iterator accessors |
+
+**Note**: `cv::vector` uses `forward_iterator_tag` (not `random_access_iterator_tag`) due to its block-based memory layout. Random access is supported via `operator[]`, not iterators.
+
 ### Legacy Benchmark Results
 
 For more details, please find it in the slides [here](https://docs.google.com/presentation/d/1zHFswkLQOmpZ0-j5z1kHkkywEColxSCnFhcCCM90Mw0/edit?usp=sharing)
