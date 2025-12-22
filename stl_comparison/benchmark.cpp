@@ -20,6 +20,7 @@ static void BM_StdVectorPush(benchmark::State& state) {
         std::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(v);
     }
@@ -30,6 +31,7 @@ static void BM_ConstantVectorPush(benchmark::State& state) {
         cv::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(v);
     }
@@ -81,6 +83,7 @@ static void BM_StdVectorAccess(benchmark::State& state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
             sum += v[i];
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(sum);
     }
@@ -96,6 +99,7 @@ static void BM_ConstantVectorAccess(benchmark::State& state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
             sum += v[i];
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(sum);
     }
@@ -112,6 +116,7 @@ static void BM_StdVectorIteration(benchmark::State& state) {
         long long sum = 0;
         for (int x : v) {
             sum += x;
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(sum);
     }
@@ -127,6 +132,7 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
         long long sum = 0;
         for (int x : v) {
             sum += x;
+            benchmark::ClobberMemory();  // Prevent loop optimization
         }
         DoNotOptimize(sum);
     }
