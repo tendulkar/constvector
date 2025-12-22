@@ -162,6 +162,7 @@ public:
             }
         }
         _meta_array[_meta_index][_last_array_index] = value;
+        ++_size;
     }
 
     /**
