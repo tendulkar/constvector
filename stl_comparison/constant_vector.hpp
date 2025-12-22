@@ -37,11 +37,14 @@ public:
 private:
     // Inline meta array - no dynamic allocation for block pointers
     T* _blocks[64] = {nullptr};
-    size_type _size = 0;
     size_type _capacity = 0;
-    size_type _block_index = 0;
-    size_type _current_block_capacity = INITIAL_BLOCK_CAPACITY;
-    long long _element_index = -1;
+    
+    // Pointer-based state for O(1) push/pop (no _size member needed!)
+    T* _write_ptr = nullptr;       // Points to next write location
+    T* _block_start = nullptr;     // Start of current block
+    T* _block_end = nullptr;       // End of current block
+    size_type _write_block = 0;    // Current block index
+    size_type _full_blocks_size = 0;  // Sum of capacities of blocks before current
     
     [[no_unique_address]] Allocator _alloc;
 
@@ -52,20 +55,28 @@ private:
         elem = adjusted ^ (INITIAL_BLOCK_CAPACITY << block);
     }
 
-    // Sync _block_index, _element_index, _current_block_capacity from _size
-    // Called before push_back if indices may be stale (after pop_back)
-    [[gnu::always_inline]] inline void sync_indices() noexcept {
-        if (_size == 0) {
-            _block_index = 0;
-            _element_index = -1;
-            _current_block_capacity = INITIAL_BLOCK_CAPACITY;
-        } else {
-            size_type block, elem;
-            get_indices(_size - 1, block, elem);
-            _block_index = block;
-            _element_index = static_cast<long long>(elem);
-            _current_block_capacity = INITIAL_BLOCK_CAPACITY << block;
+    // Advance to next block (slow path for push_back)
+    void _advance_block() {
+        _full_blocks_size += static_cast<size_type>(_block_end - _block_start);  // Add current block's capacity
+        ++_write_block;
+        size_type block_cap = INITIAL_BLOCK_CAPACITY << _write_block;
+        if (_blocks[_write_block] == nullptr) {
+            _blocks[_write_block] = _alloc.allocate(block_cap);
+            _capacity += block_cap;
         }
+        _block_start = _blocks[_write_block];
+        _write_ptr = _block_start;
+        _block_end = _block_start + block_cap;
+    }
+
+    // Retreat to previous block (slow path for pop_back)
+    void _retreat_block() {
+        --_write_block;
+        size_type prev_cap = INITIAL_BLOCK_CAPACITY << _write_block;
+        _full_blocks_size -= prev_cap;
+        _block_start = _blocks[_write_block];
+        _block_end = _block_start + prev_cap;
+        _write_ptr = _block_end;  // Points one past last element of previous block
     }
 
 public:
@@ -150,6 +161,11 @@ public:
     vector() {
         _blocks[0] = _alloc.allocate(INITIAL_BLOCK_CAPACITY);
         _capacity = INITIAL_BLOCK_CAPACITY;
+        _block_start = _blocks[0];
+        _write_ptr = _block_start;
+        _block_end = _block_start + INITIAL_BLOCK_CAPACITY;
+        _write_block = 0;
+        _full_blocks_size = 0;
     }
 
     explicit vector(size_type count, const T& value = T()) : vector() {
@@ -166,31 +182,34 @@ public:
 
     // Copy constructor
     vector(const vector& other) : vector() {
-        for (size_type i = 0; i < other._size; ++i) {
+        for (size_type i = 0; i < other.size(); ++i) {
             push_back(other[i]);
         }
     }
 
     // Move constructor
     vector(vector&& other) noexcept 
-        : _size(other._size), _capacity(other._capacity), 
-          _block_index(other._block_index), _current_block_capacity(other._current_block_capacity),
-          _element_index(other._element_index), _alloc(std::move(other._alloc)) {
+        : _capacity(other._capacity), 
+          _write_ptr(other._write_ptr), _block_start(other._block_start),
+          _block_end(other._block_end), _write_block(other._write_block),
+          _full_blocks_size(other._full_blocks_size), _alloc(std::move(other._alloc)) {
         for (size_type i = 0; i < 64; ++i) {
             _blocks[i] = other._blocks[i];
             other._blocks[i] = nullptr;
         }
-        other._size = 0;
         other._capacity = 0;
-        other._block_index = 0;
-        other._current_block_capacity = INITIAL_BLOCK_CAPACITY;
-        other._element_index = -1;
+        other._write_ptr = nullptr;
+        other._block_start = nullptr;
+        other._block_end = nullptr;
+        other._write_block = 0;
+        other._full_blocks_size = 0;
     }
 
     // Destructor
     ~vector() {
         clear();
-        for (size_type i = 0; i <= _block_index; ++i) {
+        // Deallocate all blocks that have been allocated
+        for (size_type i = 0; i < 64; ++i) {
             if (_blocks[i]) {
                 _alloc.deallocate(_blocks[i], INITIAL_BLOCK_CAPACITY << i);
             }
@@ -201,7 +220,7 @@ public:
     vector& operator=(const vector& other) {
         if (this != &other) {
             clear();
-            for (size_type i = 0; i < other._size; ++i) {
+            for (size_type i = 0; i < other.size(); ++i) {
                 push_back(other[i]);
             }
         }
@@ -210,25 +229,26 @@ public:
 
     vector& operator=(vector&& other) noexcept {
         if (this != &other) {
-            // Clean up current
+            // Clean up current - deallocate all blocks
             clear();
-            for (size_type i = 0; i <= _block_index; ++i) {
+            for (size_type i = 0; i < 64; ++i) {
                 if (_blocks[i]) {
                     _alloc.deallocate(_blocks[i], INITIAL_BLOCK_CAPACITY << i);
                     _blocks[i] = nullptr;
                 }
             }
             // Move from other
-            _size = other._size;
             _capacity = other._capacity;
-            _block_index = other._block_index;
-            _current_block_capacity = other._current_block_capacity;
-            _element_index = other._element_index;
+            _write_ptr = other._write_ptr;
+            _block_start = other._block_start;
+            _block_end = other._block_end;
+            _write_block = other._write_block;
+            _full_blocks_size = other._full_blocks_size;
             for (size_type i = 0; i < 64; ++i) {
                 _blocks[i] = other._blocks[i];
                 other._blocks[i] = nullptr;
             }
-            other._size = 0;
+            other._capacity = 0;
         }
         return *this;
     }
@@ -242,9 +262,7 @@ public:
 
     iterator end() noexcept {
         if (empty()) return iterator(nullptr);
-        size_type block, elem;
-        get_indices(_size - 1, block, elem);
-        return iterator(_blocks[block] + elem + 1);
+        return iterator(_write_ptr);
     }
 
     const_iterator begin() const noexcept {
@@ -255,17 +273,21 @@ public:
 
     const_iterator end() const noexcept {
         if (empty()) return const_iterator(nullptr);
-        size_type block, elem;
-        get_indices(_size - 1, block, elem);
-        return const_iterator(_blocks[block] + elem + 1);
+        return const_iterator(_write_ptr);
     }
 
     const_iterator cbegin() const noexcept { return begin(); }
     const_iterator cend() const noexcept { return end(); }
 
     // === Capacity ===
-    [[nodiscard]] bool empty() const noexcept { return _size == 0; }
-    size_type size() const noexcept { return _size; }
+    [[nodiscard]] bool empty() const noexcept { 
+        return _write_ptr == _blocks[0];  // Only true when at start of block 0
+    }
+    
+    size_type size() const noexcept { 
+        return _full_blocks_size + static_cast<size_type>(_write_ptr - _block_start);
+    }
+    
     size_type capacity() const noexcept { return _capacity; }
     size_type max_size() const noexcept { return static_cast<size_type>(-1) / sizeof(T); }
 
@@ -276,35 +298,29 @@ public:
 
     void shrink_to_fit() {
         // Deallocate all empty blocks beyond current usage
-        // Calculate which block the last element is in
-        if (_size == 0) {
+        if (empty()) {
             // Deallocate all but the first block
-            for (size_type i = 1; i <= _block_index; ++i) {
+            for (size_type i = 1; i < 64; ++i) {
                 if (_blocks[i]) {
                     _alloc.deallocate(_blocks[i], INITIAL_BLOCK_CAPACITY << i);
                     _capacity -= (INITIAL_BLOCK_CAPACITY << i);
                     _blocks[i] = nullptr;
                 }
             }
-            _block_index = 0;
-            _current_block_capacity = INITIAL_BLOCK_CAPACITY;
-            _element_index = -1;
+            _block_start = _blocks[0];
+            _write_ptr = _block_start;
+            _block_end = _block_start + INITIAL_BLOCK_CAPACITY;
+            _write_block = 0;
+            _full_blocks_size = 0;
         } else {
-            // Find the block containing the last element
-            size_type last_block, last_elem;
-            get_indices(_size - 1, last_block, last_elem);
-            
-            // Deallocate blocks beyond last_block
-            for (size_type i = last_block + 1; i <= _block_index; ++i) {
+            // Deallocate blocks beyond current write block
+            for (size_type i = _write_block + 1; i < 64; ++i) {
                 if (_blocks[i]) {
                     _alloc.deallocate(_blocks[i], INITIAL_BLOCK_CAPACITY << i);
                     _capacity -= (INITIAL_BLOCK_CAPACITY << i);
                     _blocks[i] = nullptr;
                 }
             }
-            _block_index = last_block;
-            _current_block_capacity = INITIAL_BLOCK_CAPACITY << last_block;
-            _element_index = static_cast<long long>(last_elem);
         }
     }
 
@@ -322,14 +338,14 @@ public:
     }
 
     reference at(size_type index) {
-        if (index >= _size) {
+        if (index >= size()) {
             throw std::out_of_range("cv::vector::at: index out of range");
         }
         return (*this)[index];
     }
 
     const_reference at(size_type index) const {
-        if (index >= _size) {
+        if (index >= size()) {
             throw std::out_of_range("cv::vector::at: index out of range");
         }
         return (*this)[index];
@@ -339,72 +355,55 @@ public:
     const_reference front() const { return _blocks[0][0]; }
 
     reference back() {
-        size_type block, elem;
-        get_indices(_size - 1, block, elem);
-        return _blocks[block][elem];
+        return *(_write_ptr - 1);
     }
     const_reference back() const {
-        size_type block, elem;
-        get_indices(_size - 1, block, elem);
-        return _blocks[block][elem];
+        return *(_write_ptr - 1);
     }
 
     // === Modifiers ===
+    // Optimized push_back - matches std::vector's *__end_++ = value pattern
     void push_back(const T& value) {
-        // Compute where new element goes based on _size
-        size_type block, elem;
-        get_indices(_size, block, elem);
-        
-        // Allocate block if needed
-        if (_blocks[block] == nullptr) {
-            size_type block_cap = INITIAL_BLOCK_CAPACITY << block;
-            _blocks[block] = _alloc.allocate(block_cap);
-            _capacity += block_cap;
+        *_write_ptr = value;
+        ++_write_ptr;
+        if (__builtin_expect(_write_ptr == _block_end, 0)) [[unlikely]] {
+            _advance_block();
         }
-        
-        _blocks[block][elem] = value;
-        ++_size;
     }
 
     void push_back(T&& value) {
-        size_type block, elem;
-        get_indices(_size, block, elem);
-        
-        if (_blocks[block] == nullptr) {
-            size_type block_cap = INITIAL_BLOCK_CAPACITY << block;
-            _blocks[block] = _alloc.allocate(block_cap);
-            _capacity += block_cap;
+        *_write_ptr = std::move(value);
+        ++_write_ptr;
+        if (__builtin_expect(_write_ptr == _block_end, 0)) [[unlikely]] {
+            _advance_block();
         }
-        
-        _blocks[block][elem] = std::move(value);
-        ++_size;
     }
 
     template <typename... Args>
     reference emplace_back(Args&&... args) {
-        size_type block, elem;
-        get_indices(_size, block, elem);
-        
-        if (_blocks[block] == nullptr) {
-            size_type block_cap = INITIAL_BLOCK_CAPACITY << block;
-            _blocks[block] = _alloc.allocate(block_cap);
-            _capacity += block_cap;
+        std::allocator_traits<Allocator>::construct(_alloc, _write_ptr, std::forward<Args>(args)...);
+        T& ref = *_write_ptr;
+        ++_write_ptr;
+        if (__builtin_expect(_write_ptr == _block_end, 0)) [[unlikely]] {
+            _advance_block();
         }
-        
-        std::allocator_traits<Allocator>::construct(_alloc, &_blocks[block][elem], std::forward<Args>(args)...);
-        ++_size;
-        return _blocks[block][elem];
+        return ref;
     }
 
-    // pop_back - just decrement size, like std::vector
-    _LIBCPP_HIDE_FROM_ABI void pop_back() noexcept {
-        --_size;
+    // pop_back - O(1) decrement, rare block retreat
+    void pop_back() noexcept {
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            _retreat_block();
+        }
+        --_write_ptr;
     }
 
     void clear() noexcept {
-        _size = 0;
-        _element_index = -1;
-        // Keep blocks allocated for reuse
+        _block_start = _blocks[0];
+        _write_ptr = _block_start;
+        _block_end = _block_start + INITIAL_BLOCK_CAPACITY;
+        _write_block = 0;
+        _full_blocks_size = 0;
     }
 
     void resize(size_type count) {
@@ -412,21 +411,22 @@ public:
     }
 
     void resize(size_type count, const T& value) {
-        while (_size > count) {
+        while (size() > count) {
             pop_back();
         }
-        while (_size < count) {
+        while (size() < count) {
             push_back(value);
         }
     }
 
     void swap(vector& other) noexcept {
         std::swap(_blocks, other._blocks);
-        std::swap(_size, other._size);
         std::swap(_capacity, other._capacity);
-        std::swap(_block_index, other._block_index);
-        std::swap(_current_block_capacity, other._current_block_capacity);
-        std::swap(_element_index, other._element_index);
+        std::swap(_write_ptr, other._write_ptr);
+        std::swap(_block_start, other._block_start);
+        std::swap(_block_end, other._block_end);
+        std::swap(_write_block, other._write_block);
+        std::swap(_full_blocks_size, other._full_blocks_size);
     }
 };
 
