@@ -14,15 +14,15 @@ constexpr size_t __SV_MSB_BITS__ = 23;
 #define m_assert(expr, msg) assert(((void)(msg), (expr)))
 #endif
 
-template <class T, class _Allocator = std::allocator<T>, class _MetaAllocator = std::allocator<T *>>
+template <class T, class _Allocator = std::allocator<T>>
 class ConstantVector
 {
     typedef _Allocator allocator_type;
-    typedef _MetaAllocator meta_allocator_type;
     typedef size_t size_type;
 
 private:
-    T **_meta_array;
+    // Inline meta_array at struct start for cache locality and direct addressing from `this`
+    T* _meta_array[64] = {nullptr};
     size_type _size;
     size_type _capacity;
     size_type _meta_index;
@@ -33,7 +33,6 @@ private:
     size_type _meta_start_offset;
 
     allocator_type _alloc;
-    meta_allocator_type _meta_alloc;
 
 public:
     class iterator
@@ -98,9 +97,7 @@ public:
      */
     ConstantVector() : _size(0), _meta_index(0), _current_block_capacity(__SV_INITIAL_CAPACITY__), _last_array_index(-1), _capacity(__SV_INITIAL_CAPACITY__), _zeroed_capacity(__SV_INITIAL_CAPACITY__), _meta_start_offset(0), _first_array_start(0)
     {
-        _meta_array = _meta_alloc.allocate(64);
-        // Zero all pointers to ensure nullptr checks work correctly
-        std::fill(_meta_array, _meta_array + 64, nullptr);
+        // _meta_array is inline and zero-initialized via member initializer
         _meta_array[0] = _alloc.allocate(__SV_INITIAL_CAPACITY__);
     }
 
@@ -134,7 +131,7 @@ public:
                 _alloc.deallocate(_meta_array[i], __SV_INITIAL_CAPACITY__ << i);
             }
         }
-        _meta_alloc.deallocate(_meta_array, 64);
+        // _meta_array is inline, no deallocation needed
     }
 
     /**
