@@ -170,6 +170,7 @@ public:
      */
     inline void pop_back_no_shrink() noexcept
     {
+        m_assert(_size, "ConstantVector is empty, but pop_back_no_shrink() called!");
         --_size;
         if (__builtin_expect(--_last_array_index < 0, 0))
         {
