@@ -149,6 +149,7 @@ public:
     void push_back(const T &value)
     {
         ++_last_array_index;
+        ++_size;
         if (__builtin_expect(!(static_cast<size_type>(_last_array_index) ^ _current_block_capacity), 0))
         {
             // Current block is full, allocate new block (no copy needed for O(1) worst case)
@@ -161,7 +162,6 @@ public:
             }
         }
         _meta_array[_meta_index][_last_array_index] = value;
-        ++_size;
     }
 
     /**
