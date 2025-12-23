@@ -80,6 +80,9 @@ private:
     }
 
 public:
+    // Forward declaration for cross-type comparison
+    class const_iterator;
+
     // === Iterator Classes ===
     class iterator {
     public:
@@ -94,17 +97,25 @@ public:
         T* _block_end;
         T** _block_ptr;
 
+        // Allow const_iterator to access private members for conversion
+        friend class const_iterator;
+
     public:
+        // Default constructor (required for LegacyIterator concept)
+        iterator() noexcept : _ptr(nullptr), _block_end(nullptr), _block_ptr(nullptr) {}
+
         iterator(T** block_ptr, size_type offset, T* block_end)
             : _block_ptr(block_ptr), _block_end(block_end) {
             _ptr = block_ptr ? (*block_ptr + offset) : nullptr;
         }
         
-        explicit iterator(T* ptr) : _ptr(ptr), _block_end(nullptr), _block_ptr(nullptr) {}
+        explicit iterator(T* ptr) noexcept : _ptr(ptr), _block_end(nullptr), _block_ptr(nullptr) {}
 
+        // Pre-increment: ++it (optimized hot path)
         iterator& operator++() noexcept {
             ++_ptr;
-            if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
+            // Simple comparison - compiler generates optimal CMP instruction
+            if (__builtin_expect(_ptr == _block_end, 0)) [[unlikely]] {
                 ++_block_ptr;
                 // Only advance if next block exists (lazy allocation support)
                 if (*_block_ptr) {
@@ -116,11 +127,29 @@ public:
             return *this;
         }
 
-        iterator operator++(int) noexcept { iterator tmp = *this; ++(*this); return tmp; }
+        // Post-increment: it++
+        iterator operator++(int) noexcept { 
+            iterator tmp = *this; 
+            ++(*this); 
+            return tmp; 
+        }
+
+        // Dereference: *it (same as std::vector - just pointer dereference)
         reference operator*() const noexcept { return *_ptr; }
+
+        // Arrow operator: it->member
         pointer operator->() const noexcept { return _ptr; }
+
+        // Comparison operators (same-type)
         bool operator==(const iterator& other) const noexcept { return _ptr == other._ptr; }
         bool operator!=(const iterator& other) const noexcept { return _ptr != other._ptr; }
+
+        // Cross-type comparison with const_iterator (uses base() to avoid dependency on const_iterator layout)
+        bool operator==(const const_iterator& other) const noexcept { return _ptr == other.base(); }
+        bool operator!=(const const_iterator& other) const noexcept { return _ptr != other.base(); }
+
+        // Get underlying pointer (for internal use)
+        pointer base() const noexcept { return _ptr; }
     };
 
     class const_iterator {
@@ -136,17 +165,29 @@ public:
         const T* _block_end;
         T* const* _block_ptr;
 
+        // Allow iterator to access private members for cross-type comparison
+        friend class iterator;
+
     public:
+        // Default constructor (required for LegacyIterator concept)
+        const_iterator() noexcept : _ptr(nullptr), _block_end(nullptr), _block_ptr(nullptr) {}
+
         const_iterator(T* const* block_ptr, size_type offset, const T* block_end)
             : _block_ptr(block_ptr), _block_end(block_end) {
             _ptr = block_ptr ? (*block_ptr + offset) : nullptr;
         }
         
-        explicit const_iterator(const T* ptr) : _ptr(ptr), _block_end(nullptr), _block_ptr(nullptr) {}
+        explicit const_iterator(const T* ptr) noexcept : _ptr(ptr), _block_end(nullptr), _block_ptr(nullptr) {}
 
+        // Converting constructor from iterator to const_iterator (implicit, like std::vector)
+        const_iterator(const iterator& it) noexcept 
+            : _ptr(it._ptr), _block_end(it._block_end), _block_ptr(it._block_ptr) {}
+
+        // Pre-increment: ++it (optimized hot path)
         const_iterator& operator++() noexcept {
             ++_ptr;
-            if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
+            // Simple comparison - compiler generates optimal CMP instruction
+            if (__builtin_expect(_ptr == _block_end, 0)) [[unlikely]] {
                 ++_block_ptr;
                 // Only advance if next block exists (lazy allocation support)
                 if (*_block_ptr) {
@@ -158,12 +199,32 @@ public:
             return *this;
         }
 
-        const_iterator operator++(int) noexcept { const_iterator tmp = *this; ++(*this); return tmp; }
+        // Post-increment: it++
+        const_iterator operator++(int) noexcept { 
+            const_iterator tmp = *this; 
+            ++(*this); 
+            return tmp; 
+        }
+
+        // Dereference: *it (same as std::vector - just pointer dereference)
         reference operator*() const noexcept { return *_ptr; }
+
+        // Arrow operator: it->member
         pointer operator->() const noexcept { return _ptr; }
+
+        // Comparison operators (same-type)
         bool operator==(const const_iterator& other) const noexcept { return _ptr == other._ptr; }
         bool operator!=(const const_iterator& other) const noexcept { return _ptr != other._ptr; }
+
+        // Cross-type comparison with iterator
+        bool operator==(const iterator& other) const noexcept { return _ptr == other._ptr; }
+        bool operator!=(const iterator& other) const noexcept { return _ptr != other._ptr; }
+
+        // Get underlying pointer (for internal use)
+        pointer base() const noexcept { return _ptr; }
     };
+
+
 
     // === Constructors ===
     vector() {
@@ -364,9 +425,21 @@ public:
     const_reference front() const { return _blocks[0][0]; }
 
     reference back() {
+        // If _write_ptr is at _block_start, last element is in previous block
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            // Previous block's last element
+            size_type prev_cap = INITIAL_BLOCK_CAPACITY << (_write_block - 1);
+            return _blocks[_write_block - 1][prev_cap - 1];
+        }
         return *(_write_ptr - 1);
     }
     const_reference back() const {
+        // If _write_ptr is at _block_start, last element is in previous block
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            // Previous block's last element
+            size_type prev_cap = INITIAL_BLOCK_CAPACITY << (_write_block - 1);
+            return _blocks[_write_block - 1][prev_cap - 1];
+        }
         return *(_write_ptr - 1);
     }
 
@@ -402,6 +475,21 @@ public:
     // pop_back - O(1) decrement, rare block retreat
     void pop_back() noexcept {
         if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            _retreat_block();
+        }
+        --_write_ptr;
+    }
+
+    // pop_back_with_shrink - pop_back + deallocate empty blocks
+    // This is optimal for memory-conscious usage: O(1) pop with automatic shrinking
+    void pop_back_with_shrink() noexcept {
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            // Deallocate the current (now empty) block before retreating
+            if (_write_block > 0 && _blocks[_write_block]) {
+                _alloc.deallocate(_blocks[_write_block], INITIAL_BLOCK_CAPACITY << _write_block);
+                _capacity -= (INITIAL_BLOCK_CAPACITY << _write_block);
+                _blocks[_write_block] = nullptr;
+            }
             _retreat_block();
         }
         --_write_ptr;

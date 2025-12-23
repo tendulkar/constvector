@@ -38,13 +38,81 @@ My algorithm described in the slides [here](https://docs.google.com/presentation
 * So we have written both implemenations with same level of optimisations (same allocators, same method modifiers, same number of function calls to the code), so that our comparision could be more accurate. we have choosen to keep implementations simple so that we could actually test the actual code instead of calculating overhead of multiple function calls (a function call typically takes > 1ns)
 
 ## Benchmark results
-Setup: Apple m2 max, 96 GB RAM, Clang, Std = C++20.
+Setup: Apple m2 max, 96 GB RAM, Clang, Std = C++23.
 * Apple clang version 15.0.0 (clang-1500.1.0.2.5)
 * Target: arm64-apple-darwin23.2.0
 * Thread model: posix
 
+### STL Comparison Benchmark (New!)
+
+Comparing `cv::vector` (ConstantVector) vs `std::vector` with equal barriers to ensure fair comparison.
+Benchmark code in `stl_comparison/` directory.
+
+| Operation | N    | cv::vector (ns/op) | std::vector (ns/op) | Δ % |
+|-----------|------|-------------------|---------------------|-----|
+| **Push** | 10   | 13.7              | 39.7                | **−65%** |
+| Push      | 100  | 3.14              | 7.60                | −59% |
+| Push      | 1K   | 2.25              | 5.39                | −58% |
+| Push      | 10K  | 1.94              | 4.35                | −55% |
+| Push      | 100K | 1.85              | 7.72                | **−76%** |
+| Push      | 1M   | 1.86              | 8.59                | **−78%** |
+| Push      | 10M  | 1.86              | 11.36               | **−84%** |
+|           |      |                   |                     |     |
+| **Pop**   | 10   | 114               | 106                 | +7% |
+| Pop       | 100  | 15.0              | 14.7                | ~ |
+| Pop       | 1K   | 2.98              | 3.90                | −24% |
+| Pop       | 10K  | 1.93              | 2.03                | −5% |
+| Pop       | 100K | 1.78              | 1.89                | −6% |
+| Pop       | 1M   | 1.91              | 1.85                | ~ |
+| Pop       | 10M  | 2.03              | 2.12                | ~ |
+|           |      |                   |                     |     |
+| **Access**| 10   | 4.04              | 2.40                | +68% |
+| Access    | 100  | 1.61              | 1.00                | +61% |
+| Access    | 1K   | 1.67              | 0.77                | +117% |
+| Access    | 10K  | 1.53              | 0.76                | +101% |
+| Access    | 100K | 1.46              | 0.87                | +68% |
+| Access    | 1M   | 1.48              | 0.82                | +80% |
+| Access    | 10M  | 1.57              | 0.96                | +64% |
+|           |      |                   |                     |     |
+| **Iterate**| 10  | 3.55              | 3.50                | ~ |
+| Iterate   | 100  | 1.40              | 0.94                | +49% |
+| Iterate   | 1K   | 0.86              | 0.74                | +16% |
+| Iterate   | 10K  | 0.92              | 0.88                | ~ |
+| Iterate   | 100K | 0.85              | 0.77                | +10% |
+| Iterate   | 1M   | 0.90              | 0.76                | +18% |
+| Iterate   | 10M  | 0.94              | 0.90                | ~ |
+
+**Key Insights:**
+- **Push**: cv::vector is **up to 84% faster** - no reallocations needed
+- **Pop**: Nearly equal performance at scale
+- **Access**: std::vector is faster (contiguous memory vs block lookup)
+- **Iteration**: Similar performance - good cache locality within blocks
+
+### Iterator Compliance
+
+`cv::vector` iterators are designed to be compatible with standard C++ forward iterators. The following features are implemented on par with `std::vector`:
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| `iterator_category` | ✅ | `forward_iterator_tag` |
+| Default constructor | ✅ | `iterator()`, `const_iterator()` |
+| Pre-increment `++it` | ✅ | O(1) with rare block transition |
+| Post-increment `it++` | ✅ | Returns copy, then increments |
+| Dereference `*it` | ✅ | Direct pointer dereference |
+| Arrow `it->member` | ✅ | Returns pointer |
+| Comparison `==`, `!=` | ✅ | Pointer comparison |
+| `iterator` → `const_iterator` | ✅ | Implicit conversion |
+| Cross-type comparison | ✅ | `it == cit` works |
+| `base()` accessor | ✅ | Returns underlying pointer |
+| `begin()` / `end()` | ✅ | Both mutable and const versions |
+| `cbegin()` / `cend()` | ✅ | Const iterator accessors |
+
+**Note**: `cv::vector` uses `forward_iterator_tag` (not `random_access_iterator_tag`) due to its block-based memory layout. Random access is supported via `operator[]`, not iterators.
+
+### Legacy Benchmark Results
+
 For more details, please find it in the slides [here](https://docs.google.com/presentation/d/1zHFswkLQOmpZ0-j5z1kHkkywEColxSCnFhcCCM90Mw0/edit?usp=sharing)
-Summary is that the new implemenation is **faster due to removing recopying**, compared to STL vector logic.
+Summary is that the new implementation is **faster due to removing recopying**, compared to STL vector logic.
 
 ### Command to build and run
 ```
