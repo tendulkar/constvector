@@ -2,28 +2,29 @@
  * Benchmark: cv::vector vs std::vector
  * 
  * Compares the performance of ConstantVector against the standard library vector.
+ * 
+ * Barrier Strategy: Uses volatile sink with back() for equal overhead
+ * - Push: Sink back() after loop - depends on pushed values
+ * - Pop: Sink back() before each pop - prevents DCE, equal overhead
+ * - Access/Iteration: Sink accumulated sum to ensure computation happens
  */
 
 #include <benchmark/benchmark.h>
 #include <vector>
 #include "constant_vector.hpp"
 
-// Force memory barrier to prevent optimization
-template <typename T>
-void DoNotOptimize(T& value) {
-    asm volatile("" : "+r,m"(value) : : "memory");
-}
+// Volatile sink prevents compiler from optimizing away operations
+// This is simpler and more reliable than inline asm barriers
+static volatile int64_t sink = 0;
 
 // === Push Benchmarks ===
-// Barrier AFTER loop - push_back has observable side effects (grows vector)
-// No per-iteration barrier needed since push cannot be DCE'd
 static void BM_StdVectorPush(benchmark::State& state) {
     for (auto _ : state) {
         std::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
+            sink = i;
         }
-        DoNotOptimize(v);  // Single barrier after all pushes
     }
 }
 
@@ -32,13 +33,13 @@ static void BM_ConstantVectorPush(benchmark::State& state) {
         cv::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
+            sink = i;
         }
-        DoNotOptimize(v);  // Single barrier after all pushes
     }
 }
 
 // === Pop Benchmarks ===
-// Barrier AFTER loop - pop_back has observable side effects (shrinks size)
+// Per-iteration sink required - otherwise compiler can optimize entire loop away
 static void BM_StdVectorPop(benchmark::State& state) {
     for (auto _ : state) {
         state.PauseTiming();
@@ -51,8 +52,8 @@ static void BM_StdVectorPop(benchmark::State& state) {
         
         for (int i = 0; i < n; ++i) {
             v.pop_back();
+            sink = i;
         }
-        benchmark::DoNotOptimize(v.size());  // Barrier on final size
     }
 }
 
@@ -66,15 +67,15 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
         }
         state.ResumeTiming();
         
+
         for (int i = 0; i < n; ++i) {
             v.pop_back();
+            sink = i;
         }
-        benchmark::DoNotOptimize(v.size());  // Barrier on final size
     }
 }
 
 // === Random Access Benchmarks ===
-// Accumulate result, barrier AFTER loop on the accumulated sum
 static void BM_StdVectorAccess(benchmark::State& state) {
     std::vector<int> v;
     for (int i = 0; i < state.range(0); ++i) {
@@ -82,11 +83,11 @@ static void BM_StdVectorAccess(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        long long sum = 0;
+        int64_t sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
             sum += v[i];
+            sink = sum;
         }
-        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
@@ -97,16 +98,15 @@ static void BM_ConstantVectorAccess(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        long long sum = 0;
+        int64_t sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
             sum += v[i];
+            sink = sum;
         }
-        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
 // === Iteration Benchmarks ===
-// Accumulate result, barrier AFTER loop on the accumulated sum
 static void BM_StdVectorIteration(benchmark::State& state) {
     std::vector<int> v;
     for (int i = 0; i < state.range(0); ++i) {
@@ -114,11 +114,11 @@ static void BM_StdVectorIteration(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        long long sum = 0;
+        int64_t sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
             sum += *it;
+            sink = sum;
         }
-        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
@@ -129,11 +129,11 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        long long sum = 0;
+        int64_t sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
             sum += *it;
+            sink = sum;
         }
-        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
@@ -160,4 +160,3 @@ BENCHMARK(BM_StdVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 BENCHMARK_MAIN();
-

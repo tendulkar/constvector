@@ -423,9 +423,21 @@ public:
     const_reference front() const { return _blocks[0][0]; }
 
     reference back() {
+        // If _write_ptr is at _block_start, last element is in previous block
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            // Previous block's last element
+            size_type prev_cap = INITIAL_BLOCK_CAPACITY << (_write_block - 1);
+            return _blocks[_write_block - 1][prev_cap - 1];
+        }
         return *(_write_ptr - 1);
     }
     const_reference back() const {
+        // If _write_ptr is at _block_start, last element is in previous block
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            // Previous block's last element
+            size_type prev_cap = INITIAL_BLOCK_CAPACITY << (_write_block - 1);
+            return _blocks[_write_block - 1][prev_cap - 1];
+        }
         return *(_write_ptr - 1);
     }
 
