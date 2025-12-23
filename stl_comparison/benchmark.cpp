@@ -113,14 +113,10 @@ static void BM_ConstantVectorPopWithShrink(benchmark::State& state) {
         }
         state.ResumeTiming();
         
-        size_t current_size = n;  // Track size locally (same as std::vector)
+        // Uses cv::vector's built-in pop_back_with_shrink
+        // Deallocates blocks when they become empty - O(1) with automatic memory reclamation
         for (int i = 0; i < n; ++i) {
-            v.pop_back();
-            --current_size;
-            // Same logic as std::vector: shrink when size < capacity/2
-            if (current_size < v.capacity() / 2) {
-                v.shrink_to_fit();
-            }
+            v.pop_back_with_shrink();
             sink = i;
         }
     }

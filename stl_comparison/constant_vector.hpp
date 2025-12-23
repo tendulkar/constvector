@@ -480,6 +480,21 @@ public:
         --_write_ptr;
     }
 
+    // pop_back_with_shrink - pop_back + deallocate empty blocks
+    // This is optimal for memory-conscious usage: O(1) pop with automatic shrinking
+    void pop_back_with_shrink() noexcept {
+        if (__builtin_expect(_write_ptr == _block_start, 0)) [[unlikely]] {
+            // Deallocate the current (now empty) block before retreating
+            if (_write_block > 0 && _blocks[_write_block]) {
+                _alloc.deallocate(_blocks[_write_block], INITIAL_BLOCK_CAPACITY << _write_block);
+                _capacity -= (INITIAL_BLOCK_CAPACITY << _write_block);
+                _blocks[_write_block] = nullptr;
+            }
+            _retreat_block();
+        }
+        --_write_ptr;
+    }
+
     void clear() noexcept {
         _block_start = _blocks[0];
         _write_ptr = _block_start;
