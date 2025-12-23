@@ -114,7 +114,8 @@ public:
         // Pre-increment: ++it (optimized hot path)
         iterator& operator++() noexcept {
             ++_ptr;
-            if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
+            // Simple comparison - compiler generates optimal CMP instruction
+            if (__builtin_expect(_ptr == _block_end, 0)) [[unlikely]] {
                 ++_block_ptr;
                 // Only advance if next block exists (lazy allocation support)
                 if (*_block_ptr) {
@@ -185,7 +186,8 @@ public:
         // Pre-increment: ++it (optimized hot path)
         const_iterator& operator++() noexcept {
             ++_ptr;
-            if (__builtin_expect(!(reinterpret_cast<uintptr_t>(_ptr) ^ reinterpret_cast<uintptr_t>(_block_end)), 0)) [[unlikely]] {
+            // Simple comparison - compiler generates optimal CMP instruction
+            if (__builtin_expect(_ptr == _block_end, 0)) [[unlikely]] {
                 ++_block_ptr;
                 // Only advance if next block exists (lazy allocation support)
                 if (*_block_ptr) {
