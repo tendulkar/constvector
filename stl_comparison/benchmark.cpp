@@ -15,14 +15,15 @@ void DoNotOptimize(T& value) {
 }
 
 // === Push Benchmarks ===
+// Barrier AFTER loop - push_back has observable side effects (grows vector)
+// No per-iteration barrier needed since push cannot be DCE'd
 static void BM_StdVectorPush(benchmark::State& state) {
     for (auto _ : state) {
         std::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
-            DoNotOptimize(v.back());  // Use back() - depends on push, equal for both
         }
-        DoNotOptimize(v);
+        DoNotOptimize(v);  // Single barrier after all pushes
     }
 }
 
@@ -31,13 +32,13 @@ static void BM_ConstantVectorPush(benchmark::State& state) {
         cv::vector<int> v;
         for (int i = 0; i < state.range(0); ++i) {
             v.push_back(i);
-            DoNotOptimize(v.back());  // Use back() - depends on push, equal for both
         }
-        DoNotOptimize(v);
+        DoNotOptimize(v);  // Single barrier after all pushes
     }
 }
 
-// === Pop Benchmarks (neither shrinks - matches std::vector) ===
+// === Pop Benchmarks ===
+// Barrier AFTER loop - pop_back has observable side effects (shrinks size)
 static void BM_StdVectorPop(benchmark::State& state) {
     for (auto _ : state) {
         state.PauseTiming();
@@ -48,13 +49,10 @@ static void BM_StdVectorPop(benchmark::State& state) {
         }
         state.ResumeTiming();
         
-        // Use counted loop - no empty() overhead
         for (int i = 0; i < n; ++i) {
             v.pop_back();
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Use capacity - simple member access for both
         }
-        DoNotOptimize(v);
+        benchmark::DoNotOptimize(v.size());  // Barrier on final size
     }
 }
 
@@ -68,17 +66,15 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
         }
         state.ResumeTiming();
         
-        // Use counted loop - no empty() overhead
         for (int i = 0; i < n; ++i) {
             v.pop_back();
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Use capacity - simple member access for both
         }
-        DoNotOptimize(v);
+        benchmark::DoNotOptimize(v.size());  // Barrier on final size
     }
 }
 
 // === Random Access Benchmarks ===
+// Accumulate result, barrier AFTER loop on the accumulated sum
 static void BM_StdVectorAccess(benchmark::State& state) {
     std::vector<int> v;
     for (int i = 0; i < state.range(0); ++i) {
@@ -88,12 +84,9 @@ static void BM_StdVectorAccess(benchmark::State& state) {
     for (auto _ : state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
-            auto val = v[i];
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Light barrier - prevents DCE, allows vectorization
-            sum += val;
+            sum += v[i];
         }
-        DoNotOptimize(sum);
+        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
@@ -106,16 +99,14 @@ static void BM_ConstantVectorAccess(benchmark::State& state) {
     for (auto _ : state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
-            auto val = v[i];
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Light barrier - prevents DCE, allows vectorization
-            sum += val;
+            sum += v[i];
         }
-        DoNotOptimize(sum);
+        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
 // === Iteration Benchmarks ===
+// Accumulate result, barrier AFTER loop on the accumulated sum
 static void BM_StdVectorIteration(benchmark::State& state) {
     std::vector<int> v;
     for (int i = 0; i < state.range(0); ++i) {
@@ -125,12 +116,9 @@ static void BM_StdVectorIteration(benchmark::State& state) {
     for (auto _ : state) {
         long long sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
-            auto val = *it;
-            sum += val;
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Light barrier
+            sum += *it;
         }
-        DoNotOptimize(sum);
+        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
@@ -143,12 +131,9 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
     for (auto _ : state) {
         long long sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
-            auto val = *it;
-            sum += val;
-            auto cap = v.capacity();
-            DoNotOptimize(cap);  // Light barrier
+            sum += *it;
         }
-        DoNotOptimize(sum);
+        benchmark::DoNotOptimize(sum);  // Barrier on accumulated result
     }
 }
 
