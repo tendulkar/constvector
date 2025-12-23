@@ -140,7 +140,7 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
 // === Benchmark Registration ===
 #define ITERATIONS 100
 #define START_SIZE 10
-#define END_SIZE int(1e7)
+#define END_SIZE int(1e8)
 #define RANGE_MULTIPLIER 10
 
 // Push
