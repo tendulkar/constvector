@@ -11,9 +11,11 @@
 namespace cv {
 
 // Configuration constants
-constexpr size_t INITIAL_BLOCK_CAPACITY = 256;
-constexpr size_t INITIAL_BLOCK_BITS = 8;
-constexpr size_t CLZ_OFFSET = 23;  // 32 - 1 - 8
+// Start with block size 1 to match std::vector's minimal initial allocation
+// Blocks grow: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, ...
+constexpr size_t INITIAL_BLOCK_CAPACITY = 1;
+constexpr size_t INITIAL_BLOCK_BITS = 0;  // 2^0 = 1
+constexpr size_t CLZ_OFFSET = 31;  // 32 - 1 - 0 = 31
 
 /**
  * ConstantVector - A vector with O(1) worst-case push_back and pop_back.
@@ -49,14 +51,16 @@ private:
     [[no_unique_address]] Allocator _alloc;
 
     // Helper to get block and element index for random access
+    // With INITIAL_BLOCK_CAPACITY=1, blocks are: [0], [1,2], [3-6], [7-14], ...
+    // For index i, block = floor(log2(i+1)), elem = (i+1) - 2^block
     [[gnu::always_inline]] inline void get_indices(size_type index, size_type& block, size_type& elem) const noexcept {
-        const unsigned int adjusted = static_cast<unsigned int>(index) + INITIAL_BLOCK_CAPACITY;
-        block = CLZ_OFFSET - static_cast<unsigned int>(__builtin_clz(adjusted));
-        elem = adjusted ^ (INITIAL_BLOCK_CAPACITY << block);
+        ++index;  // Now index = original_index + 1
+        block = 31 - __builtin_clz(static_cast<unsigned int>(index));
+        elem = index ^ (1UL << block);
     }
 
     // Advance to next block (slow path for push_back)
-    void _advance_block() {
+    [[gnu::always_inline]] void _advance_block() {
         _full_blocks_size += static_cast<size_type>(_block_end - _block_start);  // Add current block's capacity
         ++_write_block;
         size_type block_cap = INITIAL_BLOCK_CAPACITY << _write_block;
@@ -70,7 +74,7 @@ private:
     }
 
     // Retreat to previous block (slow path for pop_back)
-    void _retreat_block() {
+    [[gnu::always_inline]] void _retreat_block() {
         --_write_block;
         size_type prev_cap = INITIAL_BLOCK_CAPACITY << _write_block;
         _full_blocks_size -= prev_cap;
