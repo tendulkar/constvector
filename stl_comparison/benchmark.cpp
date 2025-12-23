@@ -89,7 +89,8 @@ static void BM_StdVectorAccess(benchmark::State& state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
             auto val = v[i];
-            DoNotOptimize(val);  // Light barrier - prevents DCE, allows vectorization
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Light barrier - prevents DCE, allows vectorization
             sum += val;
         }
         DoNotOptimize(sum);
@@ -106,7 +107,8 @@ static void BM_ConstantVectorAccess(benchmark::State& state) {
         long long sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
             auto val = v[i];
-            DoNotOptimize(val);  // Light barrier - prevents DCE, allows vectorization
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Light barrier - prevents DCE, allows vectorization
             sum += val;
         }
         DoNotOptimize(sum);
@@ -125,7 +127,8 @@ static void BM_StdVectorIteration(benchmark::State& state) {
         for (auto it = v.begin(); it != v.end(); ++it) {
             auto val = *it;
             sum += val;
-            DoNotOptimize(sum);  // Light barrier
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Light barrier
         }
         DoNotOptimize(sum);
     }
@@ -142,7 +145,8 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
         for (auto it = v.begin(); it != v.end(); ++it) {
             auto val = *it;
             sum += val;
-            DoNotOptimize(sum);  // Light barrier
+            auto cap = v.capacity();
+            DoNotOptimize(cap);  // Light barrier
         }
         DoNotOptimize(sum);
     }
