@@ -95,7 +95,7 @@ static void BM_StdVectorPopWithShrink(benchmark::State& state) {
             v.pop_back();
             --current_size;
             // Shrink when size drops below half capacity
-            if (current_size < v.capacity() / 2) {
+            if (current_size <= v.capacity() / 2) {
                 v.shrink_to_fit();
             }
             sink = i;
