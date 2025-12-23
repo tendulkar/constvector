@@ -75,6 +75,58 @@ static void BM_ConstantVectorPop(benchmark::State& state) {
     }
 }
 
+// === Pop with Shrink Benchmarks ===
+// Both use cached size counter for fair comparison (cv::vector's size() has slight overhead)
+// std::vector: pop_back + shrink_to_fit when size < capacity/2
+// cv::vector: pop_back + shrink_to_fit (deallocates empty blocks)
+
+static void BM_StdVectorPopWithShrink(benchmark::State& state) {
+    for (auto _ : state) {
+        state.PauseTiming();
+        std::vector<int> v;
+        int n = state.range(0);
+        for (int i = 0; i < n; ++i) {
+            v.push_back(i);
+        }
+        state.ResumeTiming();
+        
+        size_t current_size = n;  // Track size locally
+        for (int i = 0; i < n; ++i) {
+            v.pop_back();
+            --current_size;
+            // Shrink when size drops below half capacity
+            if (current_size < v.capacity() / 2) {
+                v.shrink_to_fit();
+            }
+            sink = i;
+        }
+    }
+}
+
+static void BM_ConstantVectorPopWithShrink(benchmark::State& state) {
+    for (auto _ : state) {
+        state.PauseTiming();
+        cv::vector<int> v;
+        int n = state.range(0);
+        for (int i = 0; i < n; ++i) {
+            v.push_back(i);
+        }
+        state.ResumeTiming();
+        
+        size_t current_size = n;  // Track size locally (same as std::vector)
+        for (int i = 0; i < n; ++i) {
+            v.pop_back();
+            --current_size;
+            // Same logic as std::vector: shrink when size < capacity/2
+            if (current_size < v.capacity() / 2) {
+                v.shrink_to_fit();
+            }
+            sink = i;
+        }
+    }
+}
+
+
 // === Random Access Benchmarks ===
 static void BM_StdVectorAccess(benchmark::State& state) {
     std::vector<int> v;
@@ -150,6 +202,10 @@ BENCHMARK(BM_ConstantVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_
 // Pop
 BENCHMARK(BM_StdVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+
+// Pop with Shrink (memory-conscious pop)
+BENCHMARK(BM_StdVectorPopWithShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_ConstantVectorPopWithShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 // Access
 BENCHMARK(BM_StdVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
