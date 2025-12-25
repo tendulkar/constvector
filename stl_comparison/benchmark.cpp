@@ -131,10 +131,8 @@ static void BM_StdVectorAccess(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        int64_t sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
-            sum += v[i];
-            sink = sum;
+            sink = v[i];
         }
     }
 }
@@ -146,10 +144,8 @@ static void BM_ConstantVectorAccess(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        int64_t sum = 0;
         for (int i = 0; i < state.range(0); ++i) {
-            sum += v[i];
-            sink = sum;
+            sink = v[i];
         }
     }
 }
