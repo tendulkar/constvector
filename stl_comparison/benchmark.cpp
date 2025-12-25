@@ -177,6 +177,151 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
     }
 }
 
+// === std::deque Benchmarks ===
+#include <deque>
+
+static void BM_DequePush(benchmark::State& state) {
+    for (auto _ : state) {
+        std::deque<int> d;
+        for (int i = 0; i < state.range(0); ++i) {
+            d.push_back(i);
+            sink = i;
+        }
+    }
+}
+
+static void BM_DequePop(benchmark::State& state) {
+    for (auto _ : state) {
+        state.PauseTiming();
+        std::deque<int> d;
+        int n = state.range(0);
+        for (int i = 0; i < n; ++i) {
+            d.push_back(i);
+        }
+        state.ResumeTiming();
+        
+        for (int i = 0; i < n; ++i) {
+            d.pop_back();
+            sink = i;
+        }
+    }
+}
+
+static void BM_DequePopWithShrink(benchmark::State& state) {
+    for (auto _ : state) {
+        state.PauseTiming();
+        std::deque<int> d;
+        int n = state.range(0);
+        for (int i = 0; i < n; ++i) {
+            d.push_back(i);
+        }
+        state.ResumeTiming();
+        
+        size_t current_size = n;
+        for (int i = 0; i < n; ++i) {
+            d.pop_back();
+            --current_size;
+            // std::deque has shrink_to_fit since C++11
+            if (current_size <= d.size() / 2 && current_size > 0) {
+                d.shrink_to_fit();
+            }
+            sink = i;
+        }
+    }
+}
+
+static void BM_DequeAccess(benchmark::State& state) {
+    std::deque<int> d;
+    for (int i = 0; i < state.range(0); ++i) {
+        d.push_back(i);
+    }
+    
+    for (auto _ : state) {
+        int64_t sum = 0;
+        for (int i = 0; i < state.range(0); ++i) {
+            sum += d[i];
+            sink = sum;
+        }
+    }
+}
+
+static void BM_DequeIteration(benchmark::State& state) {
+    std::deque<int> d;
+    for (int i = 0; i < state.range(0); ++i) {
+        d.push_back(i);
+    }
+    
+    for (auto _ : state) {
+        for (auto it = d.begin(); it != d.end(); ++it) {
+            sink = *it;
+        }
+    }
+}
+
+// === Random Access Benchmarks (shuffled indices - cache unfriendly) ===
+#include <algorithm>
+#include <random>
+
+static void BM_StdVectorRandomAccess(benchmark::State& state) {
+    int n = state.range(0);
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        v.push_back(i);
+    }
+    
+    // Create shuffled indices (done once, outside timing)
+    std::vector<int> indices(n);
+    for (int i = 0; i < n; ++i) indices[i] = i;
+    std::mt19937 rng(42);  // Fixed seed for reproducibility
+    std::shuffle(indices.begin(), indices.end(), rng);
+    
+    for (auto _ : state) {
+        for (int i = 0; i < n; ++i) {
+            sink = v[indices[i]];
+        }
+    }
+}
+
+static void BM_ConstantVectorRandomAccess(benchmark::State& state) {
+    int n = state.range(0);
+    cv::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        v.push_back(i);
+    }
+    
+    // Create shuffled indices (done once, outside timing)
+    std::vector<int> indices(n);
+    for (int i = 0; i < n; ++i) indices[i] = i;
+    std::mt19937 rng(42);  // Fixed seed for reproducibility
+    std::shuffle(indices.begin(), indices.end(), rng);
+    
+    for (auto _ : state) {
+        for (int i = 0; i < n; ++i) {
+            sink = v[indices[i]];
+        }
+    }
+}
+
+static void BM_DequeRandomAccess(benchmark::State& state) {
+    int n = state.range(0);
+    std::deque<int> d;
+    for (int i = 0; i < n; ++i) {
+        d.push_back(i);
+    }
+    
+    // Create shuffled indices (done once, outside timing)
+    std::vector<int> indices(n);
+    for (int i = 0; i < n; ++i) indices[i] = i;
+    std::mt19937 rng(42);  // Fixed seed for reproducibility
+    std::shuffle(indices.begin(), indices.end(), rng);
+    
+    for (auto _ : state) {
+        for (int i = 0; i < n; ++i) {
+            sink = d[indices[i]];
+        }
+    }
+}
+
 // === Benchmark Registration ===
 #define ITERATIONS 100
 #define START_SIZE 10
@@ -186,21 +331,31 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
 // Push
 BENCHMARK(BM_StdVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_DequePush)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 // Pop
 BENCHMARK(BM_StdVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_DequePop)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 // Pop with Shrink (memory-conscious pop)
 BENCHMARK(BM_StdVectorPopWithShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorPopWithShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_DequePopWithShrink)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 // Access
 BENCHMARK(BM_StdVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_DequeAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 // Iteration
 BENCHMARK(BM_StdVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 BENCHMARK(BM_ConstantVectorIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_DequeIteration)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+
+// Random Access (shuffled indices - cache unfriendly)
+BENCHMARK(BM_StdVectorRandomAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_ConstantVectorRandomAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
+BENCHMARK(BM_DequeRandomAccess)->Iterations(ITERATIONS)->RangeMultiplier(RANGE_MULTIPLIER)->Range(START_SIZE, END_SIZE);
 
 BENCHMARK_MAIN();
