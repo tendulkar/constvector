@@ -162,10 +162,8 @@ static void BM_StdVectorIteration(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        int64_t sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
-            sum += *it;
-            sink = sum;
+            sink = *it;
         }
     }
 }
@@ -177,10 +175,8 @@ static void BM_ConstantVectorIteration(benchmark::State& state) {
     }
     
     for (auto _ : state) {
-        int64_t sum = 0;
         for (auto it = v.begin(); it != v.end(); ++it) {
-            sum += *it;
-            sink = sum;
+            sink = *it;
         }
     }
 }
